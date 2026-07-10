@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Libertex · Trading Buddy — мобильный прототип</title>
+<style>
+  :root{
+    --bg:#0d1420; --bg2:#0a1019; --surface:#16202f; --surface-2:#1c283a;
+    --line:#263349; --line-soft:#1d2839;
+    --text:#e9eef6; --muted:#8593a9; --muted-2:#5f6d84;
+    --teal:#00c9a7; --teal-2:#12d9b5; --teal-dim:rgba(0,201,167,.14);
+    --up:#2fd08a; --down:#f16575; --amber:#f5b74f; --blue:#5aa9f0;
+    --sans:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:"Cascadia Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--sans);color:var(--text);
+    background:radial-gradient(900px 700px at 50% 0%,#141c2b,#0a0f18 70%);
+    -webkit-font-smoothing:antialiased;display:grid;place-items:center;min-height:100vh;padding:22px}
+  .tnum{font-variant-numeric:tabular-nums}
+  .mono{font-family:var(--mono)}
+
+  /* toolbar (desktop only) */
+  .toolbar{position:fixed;top:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;z-index:200}
+  .toolbar .lbl{font-size:12px;color:var(--muted-2)}
+  .langsw{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#0e1622}
+  .langsw button{background:transparent;border:0;color:var(--muted);font:600 12px var(--sans);padding:7px 12px;cursor:pointer}
+  .langsw button.on{background:var(--teal);color:#04211c}
+
+  /* ---------- phone ---------- */
+  .phone{position:relative;width:390px;height:844px;border-radius:46px;
+    background:#05080d;padding:12px;
+    box-shadow:0 0 0 2px #1b2636,0 0 0 11px #0c121c,0 40px 90px -20px rgba(0,0,0,.8);}
+  .island{position:absolute;top:22px;left:50%;transform:translateX(-50%);width:112px;height:30px;background:#000;border-radius:20px;z-index:60}
+  .screen{position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column}
+
+  .statusbar{height:48px;flex:0 0 auto;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 6px;font:600 14px var(--sans)}
+  .statusbar .r{display:flex;gap:6px;align-items:center;font-size:12px}
+  .statusbar .r svg{width:16px;height:16px}
+
+  /* app header */
+  .apphead{display:flex;align-items:center;gap:10px;padding:6px 16px 10px}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+  .brand .mark{width:22px;height:22px;border-radius:6px;background:conic-gradient(from 210deg,var(--teal),#0aa588 60%,var(--teal-2));display:grid;place-items:center;box-shadow:0 3px 10px rgba(0,201,167,.35)}
+  .brand .mark svg{width:13px;height:13px}
+  .brand b{color:#fff}.brand span{color:var(--teal)}
+  .apphead .bell{margin-left:auto;width:36px;height:36px;border-radius:11px;background:var(--surface);display:grid;place-items:center;color:var(--muted);position:relative}
+  .apphead .bell::after{content:"";position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--down);box-shadow:0 0 0 2px var(--surface)}
+  .apphead .bell svg{width:17px;height:17px}
+  .apphead .ava{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,#28405c,#1c2a3d);display:grid;place-items:center;font-size:12px;color:var(--muted)}
+
+  .appscroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 16px 92px}
+  .appscroll::-webkit-scrollbar{display:none}
+
+  .hero{padding:6px 2px 14px}
+  .hero small{color:var(--muted-2);font-size:11px;letter-spacing:.6px;text-transform:uppercase}
+  .hero .cap{font:700 30px/1.1 var(--sans);font-variant-numeric:tabular-nums;margin-top:3px}
+  .hero .cap i{font-style:normal;font-size:14px;color:var(--up);margin-left:8px}
+
+  .card{background:var(--surface);border:1px solid var(--line-soft);border-radius:18px;padding:14px}
+  .inst{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .inst .ticon{width:30px;height:30px;border-radius:9px;background:var(--surface-2);display:grid;place-items:center;font-size:15px;color:var(--amber)}
+  .inst .nm{font-weight:600;font-size:15px}
+  .inst .nm small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+  .inst .px{margin-left:auto;text-align:right;font-family:var(--mono)}
+  .inst .px b{font-size:16px}.inst .px small{display:block;color:var(--up);font-size:11px}
+  .mchart{height:104px;margin:4px -4px 6px}
+  #mc{width:100%;height:100%;display:block}
+  .tf{display:flex;gap:5px;justify-content:space-between}
+  .tf b{flex:1;text-align:center;font:600 11px var(--mono);color:var(--muted);padding:6px 0;border-radius:8px;background:var(--bg2)}
+  .tf b.on{color:#04211c;background:var(--teal)}
+
+  .trade{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+  .tbtn{border:0;border-radius:16px;padding:12px;cursor:pointer;color:#fff;text-align:left;font-family:var(--sans)}
+  .tbtn small{display:block;font-size:11px;opacity:.85;letter-spacing:.5px;text-transform:uppercase}
+  .tbtn b{font:700 19px var(--mono)}
+  .tbtn.sell{background:linear-gradient(160deg,#f16575,#d23f50)}
+  .tbtn.buy{background:linear-gradient(160deg,#2fd08a,#12a86b)}
+  .tbtn.buy small,.tbtn.buy b{color:#04211c}
+  .tbtn:active{transform:scale(.98)}
+
+  .stepper{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;padding:8px 10px;margin-bottom:16px}
+  .stepper .lbl{color:var(--muted);font-size:12px}
+  .stepper .ctl{display:flex;align-items:center;gap:12px}
+  .stepper button{width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);font-size:17px;cursor:pointer}
+  .stepper .val{font-family:var(--mono);font-weight:600;min-width:42px;text-align:center}
+
+  .sect-t{display:flex;align-items:center;margin:2px 2px 10px;font-size:13px;color:var(--muted)}
+  .sect-t b{color:var(--text);font-size:14px;margin-right:auto}
+  .pos{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;padding:11px 13px;margin-bottom:9px}
+  .pos .ic{width:30px;height:30px;border-radius:9px;background:var(--surface-2);display:grid;place-items:center;font-size:14px}
+  .pos .nm{font-weight:600;font-size:13.5px}
+  .pos .nm small{display:block;color:var(--muted);font-weight:400;font-size:11px;font-family:var(--mono)}
+  .pos .pnl{margin-left:auto;font-family:var(--mono);font-weight:600;font-size:14px}
+
+  /* bottom nav */
+  .nav{position:absolute;left:0;right:0;bottom:0;height:74px;display:flex;align-items:center;
+    padding:6px 8px 20px;background:linear-gradient(180deg,rgba(13,20,32,.4),#0c1220 34%);
+    border-top:1px solid var(--line-soft);backdrop-filter:blur(8px);z-index:30}
+  .nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted-2);font-size:10px;text-decoration:none}
+  .nav a svg{width:21px;height:21px}
+  .nav a.on{color:var(--teal)}
+
+  /* FAB */
+  .fab{position:absolute;right:16px;bottom:88px;width:54px;height:54px;border-radius:50%;z-index:35;cursor:pointer;
+    background:linear-gradient(160deg,var(--teal),#0aa588);display:grid;place-items:center;
+    box-shadow:0 10px 24px -6px rgba(0,201,167,.6),0 0 0 6px rgba(0,201,167,.08)}
+  .fab svg{width:26px;height:26px}
+  .fab .pip{position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:var(--down);
+    border:2px solid #0d1420;font:700 9px var(--sans);color:#fff;display:grid;place-items:center}
+  .fab.pulse::before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 0 rgba(0,201,167,.5);animation:pulse 2.1s infinite}
+  @keyframes pulse{70%{box-shadow:0 0 0 16px rgba(0,201,167,0)}100%{box-shadow:0 0 0 0 rgba(0,201,167,0)}}
+
+  /* ---------- push banner ---------- */
+  .push{position:absolute;top:10px;left:10px;right:10px;z-index:70;cursor:pointer;
+    background:rgba(24,33,47,.86);backdrop-filter:blur(14px);border:1px solid var(--line);
+    border-radius:20px;padding:11px 13px;display:flex;gap:11px;align-items:flex-start;
+    box-shadow:0 18px 40px -12px rgba(0,0,0,.7);
+    transform:translateY(-150%);transition:transform .5s cubic-bezier(.2,.9,.3,1.2)}
+  .push.show{transform:translateY(0)}
+  .push .pic{width:34px;height:34px;border-radius:10px;background:var(--teal-dim);border:1px solid rgba(0,201,167,.4);display:grid;place-items:center;flex:0 0 auto}
+  .push .pic svg{width:19px;height:19px}
+  .push .tx{flex:1;min-width:0}
+  .push .tx .rowt{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .push .tx .rowt b{color:var(--text);font-size:12px}
+  .push .tx .rowt time{margin-left:auto;font-size:10px;color:var(--muted-2)}
+  .push .tx .msg{font-size:12.5px;line-height:1.4;margin-top:3px;color:#dbe3ef;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .push .tx .msg b{color:#fff}
+
+  /* ---------- bottom sheet ---------- */
+  .scrim{position:absolute;inset:0;background:rgba(6,10,16,.55);z-index:80;opacity:0;pointer-events:none;transition:.3s}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .sheet{position:absolute;left:0;right:0;bottom:0;z-index:90;
+    background:linear-gradient(180deg,#18232f,#131c27);border:1px solid var(--line);border-bottom:0;
+    border-radius:26px 26px 0 0;transform:translateY(102%);transition:transform .42s cubic-bezier(.2,.9,.3,1.15);
+    box-shadow:0 -20px 50px -12px rgba(0,0,0,.6);touch-action:pan-y}
+  .sheet.open{transform:translateY(0)}
+  .grab{width:40px;height:5px;border-radius:4px;background:var(--line);margin:9px auto 4px}
+  .sh-head{display:flex;align-items:center;gap:10px;padding:6px 16px 10px}
+  .sh-head .pic{width:30px;height:30px;border-radius:9px;background:var(--teal-dim);border:1px solid rgba(0,201,167,.4);display:grid;place-items:center}
+  .sh-head .pic svg{width:17px;height:17px}
+  .sh-head .t{font-weight:700;font-size:14px}
+  .sh-head .t small{display:block;font-weight:500;font-size:10.5px;color:var(--muted)}
+  .sh-head .x{margin-left:auto;width:30px;height:30px;border-radius:8px;border:0;background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center}
+  .sh-head .x svg{width:15px;height:15px}
+
+  .swipe{overflow:hidden}
+  .sh-card{padding:4px 18px 8px;position:relative}
+  .sh-card::before{content:"";position:absolute;left:2px;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--accent,var(--teal))}
+  .ct{display:flex;align-items:center;gap:9px;margin:6px 0 9px;padding-left:12px}
+  .ct .mood{font-size:24px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font:500 11px var(--mono);color:var(--muted);background:var(--surface);border:1px solid var(--line-soft);padding:4px 10px;border-radius:20px}
+  .sh-card h3{margin:0 0 7px;font-size:17px;padding-left:12px;text-wrap:balance}
+  .sh-card .bd{font-size:14px;line-height:1.55;color:#cdd6e4;padding-left:12px}
+  .sh-card .bd b{color:#fff;font-weight:600}
+  .s-neg{color:var(--down);font-weight:600;font-family:var(--mono)}
+  .s-pos{color:var(--up);font-weight:600;font-family:var(--mono)}
+  .s-hi{color:var(--teal);font-weight:600;font-family:var(--mono)}
+  .s-mut{color:var(--text);font-weight:600;font-family:var(--mono)}
+
+  .ai-line{margin:14px 12px 0;padding:11px 13px;border-radius:13px;background:var(--surface);border:1px solid var(--line-soft);display:flex;align-items:center;gap:10px;font-size:13px}
+  .ai-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 4px var(--teal-dim);flex:0 0 auto}
+  .ai-dot.wait{background:var(--amber);box-shadow:0 0 0 4px rgba(245,183,79,.15)}
+  .ai-line .r{color:var(--muted)}
+  .ai-btn{margin-left:auto;border:0;cursor:pointer;font:600 13px var(--sans);background:var(--teal);color:#04211c;padding:9px 14px;border-radius:11px}
+  .ai-btn:active{transform:scale(.97)}
+  .ai-wait{margin-left:auto;color:var(--muted-2);font:500 11px var(--mono)}
+
+  .dots{display:flex;gap:6px;justify-content:center;padding:14px 0 6px}
+  .dots i{width:6px;height:6px;border-radius:50%;background:var(--line);transition:.2s}
+  .dots i.on{background:var(--teal);width:18px;border-radius:4px}
+
+  .sh-foot{display:flex;align-items:center;gap:10px;padding:4px 18px calc(16px + env(safe-area-inset-bottom))}
+  .navmini{display:flex;gap:8px}
+  .navmini button{width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:18px;cursor:pointer;display:grid;place-items:center}
+  .navmini button:disabled{opacity:.35}
+  .fb{display:flex;gap:8px;margin-left:auto}
+  .fbbtn{width:40px;height:38px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:11px;cursor:pointer;display:grid;place-items:center}
+  .fbbtn svg{width:17px;height:17px}
+  .fbbtn.up.on{color:var(--up);border-color:var(--up);background:rgba(47,208,138,.1)}
+  .fbbtn.down.on{color:var(--down);border-color:var(--down);background:rgba(241,101,117,.1)}
+
+  /* ---------- full-screen review ---------- */
+  .review{position:absolute;inset:0;z-index:110;background:linear-gradient(180deg,#141d29,#0e1622);
+    transform:translateY(100%);transition:transform .42s cubic-bezier(.2,.9,.3,1.12);display:flex;flex-direction:column}
+  .review.open{transform:translateY(0)}
+  .rv-head{display:flex;align-items:center;gap:11px;padding:calc(14px + env(safe-area-inset-top)) 16px 12px;border-bottom:1px solid var(--line-soft);
+    background:linear-gradient(180deg,rgba(0,201,167,.10),transparent)}
+  .rv-head .pic{width:32px;height:32px;border-radius:10px;background:var(--teal-dim);border:1px solid rgba(0,201,167,.4);display:grid;place-items:center}
+  .rv-head .pic svg{width:18px;height:18px}
+  .rv-head h3{margin:0;font-size:15px}
+  .rv-head h3 small{display:block;font-size:11px;color:var(--muted);font-weight:500}
+  .rv-head .x{margin-left:auto;width:32px;height:32px;border-radius:9px;border:0;background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center}
+  .rv-body{flex:1;overflow-y:auto;padding:14px 16px calc(24px + env(safe-area-inset-bottom))}
+  .rv-body::-webkit-scrollbar{display:none}
+  .scores{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:6px}
+  .score{background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;padding:11px}
+  .score .lbl{font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted-2)}
+  .score .val{font-family:var(--mono);font-size:21px;font-weight:700;margin:3px 0 7px}
+  .score .val i{font-size:11px;color:var(--muted-2);font-style:normal}
+  .bar{height:5px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--teal),var(--teal-2))}
+  .sec{padding:13px 0;border-bottom:1px solid var(--line-soft)}
+  .sec:last-of-type{border-bottom:0}
+  .sec h4{margin:0 0 5px;font-size:14px;display:flex;gap:8px;align-items:center}
+  .sec h4 .n{width:20px;height:20px;border-radius:6px;background:var(--teal-dim);color:var(--teal);display:grid;place-items:center;font:700 11px var(--mono);flex:0 0 auto}
+  .sec p{margin:0;font-size:13px;line-height:1.6;color:#c4cede}
+  .sec ul{margin:6px 0 0;padding:0;list-style:none;display:grid;gap:4px}
+  .sec li{font:12px/1.5 var(--mono);color:#b7c2d2;display:flex;gap:8px}
+  .sec li::before{content:"›";color:var(--teal)}
+  .disc{margin-top:14px;font-size:11px;color:var(--muted-2);font-style:italic;text-align:center}
+  .rate{display:flex;flex-direction:column;align-items:center;gap:9px;padding:16px 0 6px}
+  .rate .q{font-size:13px;color:var(--muted)}
+  .stars{display:flex;gap:8px}
+  .star{font-size:30px;color:var(--line);cursor:pointer;transition:.12s}
+  .star.on{color:var(--amber)}
+
+  .toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(16px);z-index:130;
+    background:var(--surface-2);border:1px solid var(--teal);color:var(--text);padding:10px 16px;border-radius:12px;
+    font-size:13px;display:flex;gap:9px;align-items:center;opacity:0;pointer-events:none;transition:.25s;max-width:82%}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .d{width:8px;height:8px;border-radius:50%;background:var(--teal);flex:0 0 auto}
+
+  @media (max-width:480px){
+    body{padding:0}
+    .toolbar{top:auto;bottom:calc(10px + env(safe-area-inset-bottom));background:rgba(14,22,34,.9);border-radius:12px;padding:6px}
+    .toolbar .lbl{display:none}
+    .phone{width:100vw;height:100vh;height:100dvh;border-radius:0;padding:0;box-shadow:none}
+    .island{display:none}
+    .screen{border-radius:0}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="lbl">Trading Buddy · mobile</span>
+  <div class="langsw"><button data-lang="ru" class="on">RU</button><button data-lang="en">EN</button></div>
+</div>
+
+<div class="phone">
+  <div class="island"></div>
+  <div class="screen">
+
+    <div class="statusbar">
+      <span class="mono">9:41</span>
+      <span class="r">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 17h3v3H2zM7 13h3v7H7zM12 9h3v11h-3zM17 5h3v15h-3z"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13a10 10 0 0 1 14 0M8.5 16.5a5 5 0 0 1 7 0M12 20h.01"/></svg>
+        <svg viewBox="0 0 26 24" fill="none"><rect x="1" y="7" width="20" height="10" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="9" width="15" height="6" rx="1.5" fill="currentColor"/><rect x="22" y="10" width="2" height="4" rx="1" fill="currentColor"/></svg>
+      </span>
+    </div>
+
+    <div class="apphead">
+      <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13l5 5L20 6" stroke="#04211c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Liberte</b><span>x</span></div>
+      <div class="bell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="ava">ЕШ</div>
+    </div>
+
+    <div class="appscroll">
+      <div class="hero">
+        <small data-i18n="cap">Капитал</small>
+        <div class="cap tnum">23 669.09 <span style="font-size:16px;color:var(--muted)">USD</span><i>+2.4%</i></div>
+      </div>
+
+      <div class="card">
+        <div class="inst">
+          <div class="ticon">₿</div>
+          <div class="nm">BTC/USD<small data-i18n="crypto">Криптовалюта</small></div>
+          <div class="px"><b class="tnum">66 205.41</b><small>+0.38%</small></div>
+        </div>
+        <div class="mchart"><canvas id="mc"></canvas></div>
+        <div class="tf"><b>M1</b><b class="on">M15</b><b>H1</b><b>H4</b><b>D1</b></div>
+      </div>
+
+      <div class="trade">
+        <button class="tbtn sell" id="sellBtn"><small>Sell</small><b class="tnum">66 205.<span style="font-size:22px">41</span></b></button>
+        <button class="tbtn buy" id="buyBtn"><small>Buy</small><b class="tnum">66 206.<span style="font-size:22px">15</span></b></button>
+      </div>
+
+      <div class="stepper">
+        <span class="lbl" data-i18n="vol">Объём, лот</span>
+        <div class="ctl"><button id="mns">−</button><span class="val tnum" id="lot">0.50</span><button id="pls">+</button></div>
+      </div>
+
+      <div class="sect-t"><b data-i18n="openpos">Открытые позиции</b><span>2</span></div>
+      <div class="pos"><div class="ic" style="color:var(--blue)">€</div><div class="nm">EUR/USD<small>Buy 0.50 · 1.17831</small></div><div class="pnl up">+28.00</div></div>
+      <div class="pos"><div class="ic" style="color:var(--amber)">◆</div><div class="nm">GOLD<small>Sell 0.50 · 5148.86</small></div><div class="pnl down">−12.40</div></div>
+      <div class="pos"><div class="ic" style="color:var(--muted)">¥</div><div class="nm">USD/JPY<small>Buy 0.50 · 154.965</small></div><div class="pnl up">+41.00</div></div>
+    </div>
+
+    <!-- FAB -->
+    <div class="fab pulse" id="fab">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z" stroke="#04211c" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#04211c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="pip" id="fabPip">1</span>
+    </div>
+
+    <!-- bottom nav -->
+    <nav class="nav">
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V9l8-5 8 5v10M9 19v-6h6v6"/></svg><span data-i18n="n_markets">Рынки</span></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 15l4-5 4 3 5-7 3 4"/></svg><span data-i18n="n_charts">Графики</span></a>
+      <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v18M3 8h18M6 13l3 3 6-6"/></svg><span data-i18n="n_trade">Торговля</span></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 5h18v14H3zM3 10h18"/></svg><span data-i18n="n_port">Портфель</span></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-5 8-5s6.5 1 8 5"/></svg><span data-i18n="n_prof">Профиль</span></a>
+    </nav>
+
+    <!-- push -->
+    <div class="push" id="push">
+      <div class="pic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z" stroke="var(--teal)" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="var(--teal)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="tx">
+        <div class="rowt"><b>Trading Buddy</b><span id="pushTitle"></span><time data-i18n="now">сейчас</time></div>
+        <div class="msg" id="pushMsg"></div>
+      </div>
+    </div>
+
+    <!-- sheet -->
+    <div class="scrim" id="scrim"></div>
+    <div class="sheet" id="sheet">
+      <div class="grab"></div>
+      <div class="sh-head">
+        <div class="pic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z" stroke="var(--teal)" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="var(--teal)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="t">Trading Buddy<small data-i18n="wSub">твоё торговое зеркало</small></div>
+        <button class="x" id="sheetX"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="swipe" id="swipe"><div class="sh-card" id="shCard"></div></div>
+      <div class="dots" id="dots"></div>
+      <div class="sh-foot">
+        <div class="navmini"><button id="mprev">‹</button><button id="mnext">›</button></div>
+        <div class="fb">
+          <button class="fbbtn up" id="mlike"><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v9H4v-9h3zm3 9l3.5-8.5c.3-.7 0-1.5-.7-1.8-.5-.2-1-.1-1.4.2L8 12v7h5.5c.9 0 1.7-.6 1.9-1.5l1.3-5c.3-1.2-.6-2.5-1.9-2.5H10z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+          <button class="fbbtn down" id="mdislike"><svg viewBox="0 0 24 24" fill="none" style="transform:rotate(180deg)"><path d="M7 10v9H4v-9h3zm3 9l3.5-8.5c.3-.7 0-1.5-.7-1.8-.5-.2-1-.1-1.4.2L8 12v7h5.5c.9 0 1.7-.6 1.9-1.5l1.3-5c.3-1.2-.6-2.5-1.9-2.5H10z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- review -->
+    <div class="review" id="review">
+      <div class="rv-head">
+        <div class="pic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z" stroke="var(--teal)" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="var(--teal)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h3 data-i18n="mTitle">AI-разбор последних 10 сделок<small data-i18n="mSub">поведенческий анализ · не инвестсовет</small></h3>
+        <button class="x" id="rvX"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="rv-body" id="rvBody"></div>
+    </div>
+
+    <div class="toast" id="toast"><span class="d"></span><span id="toastMsg"></span></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var lang="ru";
+  var T={
+    ru:{cap:"Капитал",crypto:"Криптовалюта",vol:"Объём, лот",openpos:"Открытые позиции",wSub:"твоё торговое зеркало",
+        n_markets:"Рынки",n_charts:"Графики",n_trade:"Торговля",n_port:"Портфель",n_prof:"Профиль",now:"сейчас",
+        mTitle:"AI-разбор последних 10 сделок",mSub:"поведенческий анализ · не инвестсовет",
+        reviewReady:"AI-разбор готов",openReview:"Открыть",reviewIn:function(n){return "Разбор через "+n+" "+pl(n,["сделку","сделки","сделок"]);},
+        rateQ:"Оцени этот разбор",disc:"AI может ошибаться. Это разбор поведения, а не инвестиционный совет.",habit:"Привычка на след. 10 сделок",
+        tFb:"Спасибо! Учтём в подсказках.",tStar:"Оценка отправлена — тюним под тебя.",tClosed:"Сделка закрыта · разбор готов",tBuy:"Позиция открыта"},
+    en:{cap:"Equity",crypto:"Cryptocurrency",vol:"Volume, lot",openpos:"Open positions",wSub:"your trading mirror",
+        n_markets:"Markets",n_charts:"Charts",n_trade:"Trade",n_port:"Portfolio",n_prof:"Profile",now:"now",
+        mTitle:"AI review · last 10 trades",mSub:"behavioural analysis · not investment advice",
+        reviewReady:"AI review ready",openReview:"Open",reviewIn:function(n){return "Review in "+n+" more trade"+(n>1?"s":"");},
+        rateQ:"Rate this review",disc:"AI can make mistakes. This reflects behaviour, not investment advice.",habit:"Habit for the next 10 trades",
+        tFb:"Thanks! We'll tune your nudges.",tStar:"Rating sent — tuning for you.",tClosed:"Trade closed · review ready",tBuy:"Position opened"}
+  };
+  function pl(n,f){var m=n%100,d=n%10;return m>4&&m<20?f[2]:d===1?f[0]:d>1&&d<5?f[1]:f[2];}
+
+  var TR=[
+    {sym:"BTC/USD",flag:"₿",mood:"loss",acc:"var(--amber)",short:{ru:"Небольшая просадка",en:"Small drawdown"},
+     title:{ru:"Небольшая просадка",en:"Small drawdown"},
+     body:{ru:'Ты закрыл <b>BTC/USD</b> с убытком <span class="s-neg">−103.0$</span> — на <span class="s-neg">24.5$</span> больше твоего среднего убытка (<span class="s-mut">78.5$</span>). Бывает: за 10 сделок ты в целом <span class="s-pos">+28.0$</span>.',
+           en:'You closed <b>BTC/USD</b> at <span class="s-neg">−103.0$</span> — <span class="s-neg">24.5$</span> more than your average loss (<span class="s-mut">78.5$</span>). It happens: over 10 trades you\'re <span class="s-pos">+28.0$</span>.'},rev:{st:"wait",n:4}},
+    {sym:"EUR/USD",flag:"€",mood:"win",acc:"var(--up)",short:{ru:"Хорошая работа!",en:"Good work!"},
+     title:{ru:"Хорошая работа!",en:"Good work!"},
+     body:{ru:'Прибыль <span class="s-pos">+28.0$</span> по <b>EUR/USD</b> — и со стоп-лоссом, отлично. Близко к твоему среднему профиту (<span class="s-mut">31.5$</span>) 👏',
+           en:'Profit <span class="s-pos">+28.0$</span> on <b>EUR/USD</b> — and with a stop-loss, nice. Close to your average (<span class="s-mut">31.5$</span>) 👏'},rev:{st:"ready"}},
+    {sym:"GOLD",flag:"◆",mood:"warn",acc:"var(--amber)",short:{ru:"Сделка без стоп-лосса",en:"No stop-loss"},
+     title:{ru:"Сделка без стоп-лосса",en:"Trade without a stop-loss"},
+     body:{ru:'Ты открыл <b>GOLD</b> без стоп-лосса. За 30 дней лишь <span class="s-hi">0%</span> твоих сделок были со стопом — главная зона роста. Решение за тобой.',
+           en:'You opened <b>GOLD</b> with no stop-loss. In 30 days only <span class="s-hi">0%</span> had one — your biggest growth area. Your call.'},rev:{st:"wait",n:2}},
+    {sym:"GBP/USD",flag:"£",mood:"risk",acc:"var(--down)",short:{ru:"Высокая нагрузка на маржу",en:"High margin usage"},
+     title:{ru:"Высокая нагрузка на маржу",en:"High margin usage"},
+     body:{ru:'Позиция <b>GBP/USD</b> использует <span class="s-neg">78%</span> свободной маржи. При движении на <span class="s-neg">1.2%</span> против тебя возможен margin call. Не совет — просто чтобы ты знал заранее.',
+           en:'Your <b>GBP/USD</b> uses <span class="s-neg">78%</span> of free margin. A <span class="s-neg">1.2%</span> move against you risks a margin call. Not advice — just a heads-up.'},rev:{st:"wait",n:1}},
+    {sym:"USD/JPY",flag:"¥",mood:"win",acc:"var(--up)",short:{ru:"Хорошая работа!",en:"Good work!"},
+     title:{ru:"Хорошая работа!",en:"Good work!"},
+     body:{ru:'Прибыль <span class="s-pos">+41.0$</span> по <b>USD/JPY</b>. Твой средний профит <span class="s-mut">31.5$</span> — ты выше него 🚀',
+           en:'Profit <span class="s-pos">+41.0$</span> on <b>USD/JPY</b>. Your average is <span class="s-mut">31.5$</span> — you beat it 🚀'},rev:{st:"ready"}},
+    {sym:"BTC/USD",flag:"₿",mood:"calm",acc:"var(--blue)",short:{ru:"Пауза?",en:"Take a breath?"},
+     title:{ru:"Пауза?",en:"Take a breath?"},
+     body:{ru:'Ты открыл <span class="s-hi">3 сделки</span> за <span class="s-hi">6 минут</span> после убытка. Такие «отыгрыши» у тебя в плюс лишь в <span class="s-neg">28%</span> случаев. Никто не торопит.',
+           en:'You opened <span class="s-hi">3 trades</span> in <span class="s-hi">6 minutes</span> after a loss. Your "revenge" trades close green only <span class="s-neg">28%</span> of the time. No rush.'},rev:{st:"wait",n:3}},
+    {sym:"EUR/USD",flag:"€",mood:"streak",acc:"var(--teal)",short:{ru:"Серия 🔥",en:"Streak 🔥"},
+     title:{ru:"Серия 🔥",en:"Streak 🔥"},
+     body:{ru:'<span class="s-pos">4 сделки</span> подряд со стоп-лоссом. Твоя дисциплина на этой неделе — <span class="s-hi">6/10</span> и растёт.',
+           en:'<span class="s-pos">4 trades</span> in a row with a stop-loss. Your discipline this week is <span class="s-hi">6/10</span> and rising.'},rev:{st:"ready"}},
+    {sym:"US 500",flag:"◆",mood:"info",acc:"var(--teal)",short:{ru:"Почти весь в EUR/USD",en:"Mostly in EUR/USD"},
+     title:{ru:"Ты почти весь в EUR/USD",en:"You're mostly in EUR/USD"},
+     body:{ru:'<span class="s-hi">64%</span> твоих сделок за месяц — это <b>EUR/USD</b>. Сделки по <b>US 500</b> закрывались в плюс в <span class="s-pos">58%</span> случаев. Аналитику — в разделе Insights.',
+           en:'<span class="s-hi">64%</span> of your month\'s trades are <b>EUR/USD</b>. Your <b>US 500</b> trades closed green <span class="s-pos">58%</span> of the time. Analytics live in Insights.'},rev:{st:"wait",n:2}},
+    {sym:"CrudeOIL",flag:"◆",mood:"win",acc:"var(--up)",short:{ru:"Плюс, но небольшой",en:"A win — but small"},
+     title:{ru:"Плюс, но небольшой",en:"A win — but small"},
+     body:{ru:'Прибыль <span class="s-pos">+9.0$</span> по <b>CrudeOIL</b> — ниже твоего среднего (<span class="s-mut">31.5$</span>). Возможно, закрыл рановато: средняя сделка живёт <span class="s-hi">10 мин</span>.',
+           en:'Profit <span class="s-pos">+9.0$</span> on <b>CrudeOIL</b> — below your average (<span class="s-mut">31.5$</span>). Maybe closed early: your trades last <span class="s-hi">10 min</span> on average.'},rev:{st:"wait",n:1}},
+    {sym:"EUR/USD",flag:"€",mood:"win",acc:"var(--up)",short:{ru:"Хорошая работа!",en:"Good work!"},
+     title:{ru:"Хорошая работа!",en:"Good work!"},
+     body:{ru:'Чистая прибыль по серии <span class="s-pos">+28.0$</span>. Помни, твой средний профит выше (<span class="s-mut">31.5$</span>). Твой AI-разбор готов!',
+           en:'Net profit on this run <span class="s-pos">+28.0$</span>. Remember your average is higher (<span class="s-mut">31.5$</span>). Your AI review is ready!'},rev:{st:"ready"}}
+  ];
+  var MOOD={loss:"😕",win:"✅",warn:"⚠️",risk:"🛟",calm:"🧘",streak:"🔥",info:"🎯"};
+  var REVIEW={
+    scores:[{kn:{ru:"Консистентность",en:"Consistency"},v:7},{kn:{ru:"Дисциплина",en:"Discipline"},v:6},{kn:{ru:"Рациональность",en:"Rational"},v:8}],
+    secs:[
+     {h:{ru:"Твой стиль",en:"Trading style"},p:{ru:"Ты swing-трейдер: средняя сделка живёт 10 минут, ловишь среднесрочные откаты. Работает эффективно 🚀",en:"You're a swing trader: ~10 min trades, catching medium-term retracements. It works 🚀"}},
+     {h:{ru:"Ключевые цифры",en:"Key numbers"},list:{ru:["Сделок: 10 · Лучшая: EUR/USD +54$ · Худшая: BTC/USD −103$","Средний профит 4.2$ · Средний убыток 60.5$","Со стоп-лоссом: 0% · Длительность 10 мин (2–12)"],en:["Trades: 10 · Best EUR/USD +54$ · Worst BTC/USD −103$","Avg profit 4.2$ · Avg loss 60.5$","Stop-loss: 0% · Duration 10 min (2–12)"]}},
+     {h:{ru:"Динамика",en:"Momentum"},p:{ru:"Результаты неровные vs прошлый период. Самый прибыльный актив — EUR/USD ⭐",en:"Uneven vs last period. Most profitable asset: EUR/USD ⭐"}},
+     {h:{ru:"Риск",en:"Risk-taking"},p:{ru:"Риск умеренный, но плечо высокое и <b>стопов не было ни в одной сделке</b> — главная зона роста.",en:"Risk moderate, but leverage high and <b>no trade had a stop-loss</b> — biggest growth area."}},
+     {h:{ru:"Жадность и страх",en:"Greed & fear"},p:{ru:"В целом решения рациональные, без явных эмоциональных всплесков 🕊",en:"Broadly rational, no clear emotional spikes 🕊"}},
+     {h:{ru:"Прогресс",en:"Learning curve"},p:{ru:"Ты стал фокусироваться на EUR/USD — самом прибыльном активе, это зрелость.",en:"You've started focusing on EUR/USD, your most profitable asset — that's maturity."},habit:{ru:"поставь стоп-лосс хотя бы в половине сделок.",en:"set a stop-loss in at least half your trades."}}
+    ]
+  };
+
+  var idx=0, likes={};
+  var $=function(id){return document.getElementById(id);};
+  var shCard=$("shCard"),dots=$("dots"),mprev=$("mprev"),mnext=$("mnext"),mlike=$("mlike"),mdislike=$("mdislike");
+
+  function renderSheet(){
+    var tr=TR[idx],L=T[lang],ai;
+    if(tr.rev.st==="ready") ai='<span class="ai-dot"></span><span class="r">'+L.reviewReady+'</span><button class="ai-btn" id="mOpenRev">'+L.openReview+'</button>';
+    else ai='<span class="ai-dot wait"></span><span class="r">'+L.reviewIn(tr.rev.n)+'</span>';
+    shCard.style.setProperty("--accent",tr.acc);
+    shCard.innerHTML='<div class="ct"><span class="mood">'+MOOD[tr.mood]+'</span><span class="chip">'+tr.flag+' '+tr.sym+'</span></div>'+
+      '<h3>'+tr.title[lang]+'</h3><div class="bd">'+tr.body[lang]+'</div><div class="ai-line">'+ai+'</div>';
+    var d="";for(var i=0;i<TR.length;i++)d+='<i class="'+(i===idx?"on":"")+'"></i>';dots.innerHTML=d;
+    mprev.disabled=idx===0;mnext.disabled=idx===TR.length-1;
+    mlike.classList.toggle("on",likes[idx]===1);mdislike.classList.toggle("on",likes[idx]===-1);
+    var o=$("mOpenRev");if(o)o.onclick=openReview;
+    shCard.animate&&shCard.animate([{opacity:.3,transform:"translateX("+(lastDir*14)+"px)"},{opacity:1,transform:"none"}],{duration:200,easing:"ease-out"});
+  }
+  var lastDir=1;
+  function go(d){var ni=Math.max(0,Math.min(TR.length-1,idx+d));if(ni!==idx){lastDir=d;idx=ni;renderSheet();}}
+  mprev.onclick=function(){go(-1)};mnext.onclick=function(){go(1)};
+  mlike.onclick=function(){likes[idx]=likes[idx]===1?0:1;renderSheet();if(likes[idx])toast(T[lang].tFb);};
+  mdislike.onclick=function(){likes[idx]=likes[idx]===-1?0:-1;renderSheet();if(likes[idx])toast(T[lang].tFb);};
+
+  // swipe
+  var sw=$("swipe"),sx=0,sxOn=false;
+  sw.addEventListener("pointerdown",function(e){sx=e.clientX;sxOn=true;});
+  sw.addEventListener("pointerup",function(e){if(!sxOn)return;sxOn=false;var dx=e.clientX-sx;if(dx<-40)go(1);else if(dx>40)go(-1);});
+  sw.addEventListener("pointercancel",function(){sxOn=false;});
+
+  // sheet open/close
+  var sheet=$("sheet"),scrim=$("scrim");
+  function openSheet(){renderSheet();sheet.classList.add("open");scrim.classList.add("open");}
+  function closeSheet(){sheet.classList.remove("open");scrim.classList.remove("open");}
+  $("sheetX").onclick=closeSheet;scrim.onclick=closeSheet;
+
+  // push
+  var push=$("push"),pushT;
+  function showPush(i){var tr=TR[i],L=T[lang];
+    $("pushTitle").textContent="· "+tr.short[lang];
+    $("pushMsg").innerHTML=tr.body[lang];
+    push.classList.add("show");clearTimeout(pushT);pushT=setTimeout(function(){push.classList.remove("show");},5200);}
+  push.onclick=function(){push.classList.remove("show");openSheet();};
+
+  // FAB
+  $("fab").onclick=function(){$("fab").classList.remove("pulse");$("fabPip").style.display="none";openSheet();};
+
+  // simulate trade -> feedback
+  function simulate(kind){
+    idx=(idx+1)%TR.length;
+    toast(kind==="close"?T[lang].tClosed:T[lang].tBuy);
+    showPush(idx);
+    $("fabPip").style.display="";$("fabPip").textContent="1";$("fab").classList.add("pulse");
+    if(sheet.classList.contains("open"))renderSheet();
+  }
+  $("sellBtn").onclick=function(){simulate("close")};
+  $("buyBtn").onclick=function(){simulate("buy")};
+
+  // lot stepper
+  var lot=0.50;
+  $("pls").onclick=function(){lot=Math.round((lot+0.1)*10)/10;$("lot").textContent=lot.toFixed(2);};
+  $("mns").onclick=function(){lot=Math.max(0.1,Math.round((lot-0.1)*10)/10);$("lot").textContent=lot.toFixed(2);};
+
+  // review
+  var review=$("review"),rvBody=$("rvBody");
+  function renderReview(){var L=T[lang],h='<div class="scores">';
+    REVIEW.scores.forEach(function(s){h+='<div class="score"><div class="lbl">'+s.kn[lang]+'</div><div class="val">'+s.v+'<i>/10</i></div><div class="bar"><i style="width:'+(s.v*10)+'%"></i></div></div>';});
+    h+='</div>';
+    REVIEW.secs.forEach(function(sec,j){h+='<div class="sec"><h4><span class="n">'+(j+1)+'</span>'+sec.h[lang]+'</h4>';
+      if(sec.p)h+='<p>'+sec.p[lang]+'</p>';
+      if(sec.list){h+='<ul>';sec.list[lang].forEach(function(x){h+='<li>'+x+'</li>';});h+='</ul>';}
+      if(sec.habit)h+='<p style="margin-top:8px;color:var(--teal)"><b>'+L.habit+':</b> '+sec.habit[lang]+'</p>';h+='</div>';});
+    h+='<div class="rate"><div class="q">'+L.rateQ+'</div><div class="stars" id="mstars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div></div>';
+    h+='<div class="disc">'+L.disc+'</div>';rvBody.innerHTML=h;
+    var stars=rvBody.querySelectorAll(".star");
+    stars.forEach(function(st,i){st.onclick=function(){stars.forEach(function(x,xi){x.classList.toggle("on",xi<=i);});toast(T[lang].tStar);};});
+  }
+  function openReview(){renderReview();review.classList.add("open");}
+  $("rvX").onclick=function(){review.classList.remove("open");};
+
+  // lang
+  document.querySelectorAll("[data-lang]").forEach(function(b){b.onclick=function(){
+    lang=b.getAttribute("data-lang");document.documentElement.lang=lang;
+    document.querySelectorAll("[data-lang]").forEach(function(x){x.classList.toggle("on",x===b);});
+    applyStatic();if(sheet.classList.contains("open"))renderSheet();
+    if(review.classList.contains("open"))renderReview();
+    if(push.classList.contains("show"))showPush(idx);
+  };});
+  function applyStatic(){var L=T[lang];
+    document.querySelectorAll("[data-i18n]").forEach(function(el){var k=el.getAttribute("data-i18n");
+      if(k==="mTitle"||k==="wSub"||k==="mSub")return;if(L[k]!=null)el.textContent=L[k];});
+    document.querySelector('[data-i18n="wSub"]').textContent=L.wSub;
+    document.querySelector('[data-i18n="mTitle"]').innerHTML=L.mTitle+'<small>'+L.mSub+'</small>';
+  }
+
+  // toast
+  var toastEl=$("toast"),toastMsg=$("toastMsg"),tt;
+  function toast(m){toastMsg.textContent=m;toastEl.classList.add("show");clearTimeout(tt);tt=setTimeout(function(){toastEl.classList.remove("show");},2100);}
+
+  // mini chart
+  var cv=$("mc"),ctx=cv.getContext("2d");
+  function seed(s){return function(){s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};}
+  function drawMini(){var w=cv.parentElement,dpr=window.devicePixelRatio||1,W=w.clientWidth,H=w.clientHeight;
+    if(!W)return;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+    var rnd=seed(11),n=Math.floor(W/7),cw=W/n,price=100,cs=[];
+    for(var i=0;i<n;i++){var o=price,c=o+(rnd()-0.48)*2.6,hi=Math.max(o,c)+rnd()*1.1,lo=Math.min(o,c)-rnd()*1.1;cs.push([o,c,hi,lo]);price=c;}
+    var mx=Math.max.apply(null,cs.map(function(k){return k[2];})),mn=Math.min.apply(null,cs.map(function(k){return k[3];}));
+    function Y(v){return 6+(H-12)*(1-(v-mn)/(mx-mn));}
+    for(i=0;i<n;i++){var k=cs[i],x=i*cw+cw/2,up=k[1]>=k[0],col=up?"#2fd08a":"#f16575";
+      ctx.strokeStyle=col;ctx.fillStyle=col;ctx.globalAlpha=1;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x,Y(k[2]));ctx.lineTo(x,Y(k[3]));ctx.stroke();
+      var bw=Math.max(2,cw*0.6),yo=Y(k[0]),yc=Y(k[1]);ctx.globalAlpha=up?.95:.85;
+      ctx.fillRect(x-bw/2,Math.min(yo,yc),bw,Math.max(1.5,Math.abs(yc-yo)));}
+    ctx.globalAlpha=1;
+  }
+  window.addEventListener("resize",function(){clearTimeout(cv._t);cv._t=setTimeout(drawMini,120);});
+
+  applyStatic();drawMini();
+  setTimeout(function(){showPush(0);},1100);
+})();
+</script>
+</body>
+</html>
