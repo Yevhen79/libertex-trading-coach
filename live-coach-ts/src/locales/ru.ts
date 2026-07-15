@@ -8,7 +8,6 @@
  */
 
 import type { Copy } from "./contract";
-import { plural } from "../format";
 
 export const ru: Copy = {
   // ---- per-trade openers ----------------------------------------------
@@ -104,12 +103,15 @@ export const ru: Copy = {
   sec6LevHigh: "Плечо высокое — при снижении у маржи будет больше запаса на обычных колебаниях.",
   sec6LevOk: "Плечо в разумных пределах.",
 
-  scoreConsistencyLabel: "Консистентность",
-  scoreConsistencyNote: (wr, ls) => `win rate ${wr}%, серия убытков ${ls}`,
-  scoreDisciplineLabel: "Дисциплина",
-  scoreDisciplineNote: (sl, mAvg, expo) => `стопы ${sl}%, плечо ×${mAvg}, маржа ${expo}%`,
-  scoreRationalLabel: "Рациональность",
-  scoreRationalNote: (rr, rev) => `R:R 1:${rr}, отыгрышей ${rev}`,
+  metricCooldownLabel: "Пауза между сделками",
+  metricCooldownValue: (min) => `${min} мин`,
+  metricCooldownNote: "медиана паузы",
+  metricSizeLabel: "Разброс размера",
+  metricSizeValue: (m) => `±${m}%`,
+  metricSizeNote: (mult) => `маржа; плечо ±${mult}%`,
+  metricPostLossLabel: "Win rate после убытка",
+  metricPostLossValue: (wr) => (wr == null ? "—" : `${wr}%`),
+  metricPostLossNote: (c) => (c > 0 ? `выборка: ${c}` : "нет таких сделок"),
 
   habitStop: "ставить стоп-лосс на каждую сделку (при высоком плече — обязательно)",
   habitLeverage: "снизить плечо — оно кратно усиливает риск слить маржу",
@@ -120,20 +122,29 @@ export const ru: Copy = {
   greeting: (every, tc, balK) =>
     `Я твой Trading Coach. После каждой сделки — короткий разбор по фактам, раз в ${every} сделок — полный обзор стиля, риска и привычек. Баланс ~$${balK}. <b style="color:${tc}">Сделай первую сделку.</b>`,
   openReviewBtn: (every) => `📊 Открыть полный AI-разбор ${every} сделок`,
-  reviewCountdown: (left, tc, _rs) =>
-    `ещё <b style="color:${tc}">${left}</b> ${plural(left)} до AI-разбора`,
+  ringLearning: "профиль изучается",
+  ringReady: "разбор готов",
   helpful: "Полезно?",
   thanksUp: "Спасибо за отзыв.",
   thanksDown: "Принято.",
   reviewSubtitle: (n) => `разбор последних ${n} сделок`,
-  scoresHeading: (n) => `Оценки за ${n} сделок`,
+  metricsHeading: (n) => `Метрики за ${n} сделок`,
   habitHeading: (n) => `Привычка №1 на следующие ${n}:`,
   reviewHelpfulQ: "Насколько полезен разбор?",
   reviewDisclaimer: "AI может ошибаться. Это разбор поведения и риск-профиля, не инвестиционный совет.",
   thanksRating: "Спасибо за оценку.",
   headerStatus: "live • демо-счёт",
   headerWatching: "слежу",
-  newTrades: (n) => `новых сделок: ${n}`,
+
+  // ---- revenge-trade warning banner -----------------------------------
+  revengeTitle: "Похоже на отыгрыш",
+  revengeLev: (cur, prev) => `бо́льшим плечом (×${cur} против ×${prev})`,
+  revengeMargin: (curK, prevK) => `бо́льшей маржой ($${curK} против $${prevK})`,
+  revengeAnd: " и ",
+  revengeBody: (min, risk) =>
+    `Прошлая сделка закрылась в минус ${min} мин назад. Эта открыта с ${risk}. По времени и риску — это отыгрыш.`,
+  revengeWinRate: (wr) => `Раньше после убытка ты закрывался в плюс лишь в ${wr}% случаев.`,
+  revengeGotIt: "Понятно",
 
   // ---- entry-point toasts ---------------------------------------------
   reviewReadyToastPrefix: (every) => `🧠 AI Trading Review ${every} сделок готов • `,

@@ -110,12 +110,18 @@ export interface Copy {
   sec6LevHigh: string;
   sec6LevOk: string;
 
-  scoreConsistencyLabel: string;
-  scoreConsistencyNote(wr: number, lossStreak: number): string;
-  scoreDisciplineLabel: string;
-  scoreDisciplineNote(slPct: number, mAvg: number, expoMax: number): string;
-  scoreRationalLabel: string;
-  scoreRationalNote(rr: string, revenge: number): string;
+  // ---- review metrics (raw behavioural numbers, not 1..10 scores) -----
+  metricCooldownLabel: string;
+  metricCooldownValue(min: number): string;
+  metricCooldownNote: string;
+  metricSizeLabel: string;
+  metricSizeValue(marginPct: number): string;
+  metricSizeNote(multPct: number): string;
+  metricPostLossLabel: string;
+  /** Headline: the win-rate %, or "—" when there were no post-loss trades. */
+  metricPostLossValue(wr: number | null): string;
+  /** Context under it: how many post-loss trades the rate is based on. */
+  metricPostLossNote(count: number): string;
 
   habitStop: string;
   habitLeverage: string;
@@ -125,19 +131,35 @@ export interface Copy {
   // ---- UI chrome (ui) -------------------------------------------------
   greeting(reviewEvery: number, tColour: string, balK: string): string;
   openReviewBtn(reviewEvery: number): string;
-  reviewCountdown(left: number, tColour: string, rsColour: string): string;
+  /** Progress-ring label while the coach is still gathering trades. */
+  ringLearning: string;
+  /** Progress-ring label when a full review is ready to open. */
+  ringReady: string;
   helpful: string;
   thanksUp: string;
   thanksDown: string;
   reviewSubtitle(n: number): string;
-  scoresHeading(n: number): string;
+  metricsHeading(n: number): string;
   habitHeading(n: number): string;
   reviewHelpfulQ: string;
   reviewDisclaimer: string;
   thanksRating: string;
   headerStatus: string;
   headerWatching: string;
-  newTrades(n: number): string;
+
+  // ---- revenge-trade warning banner (index) ---------------------------
+  revengeTitle: string;
+  /** Higher-leverage escalation phrase, e.g. "×500 против ×100". */
+  revengeLev(cur: number, prev: number): string;
+  /** Bigger-margin escalation phrase, e.g. "$1.2k против $400". */
+  revengeMargin(curK: string, prevK: string): string;
+  /** Conjunction joining two escalation phrases (" и " / " and "). */
+  revengeAnd: string;
+  /** Main sentence: minutes since the loss + the joined escalation phrase. */
+  revengeBody(minutesAfter: number, riskJoined: string): string;
+  /** Optional line, added only with ≥5 historical post-loss trades. */
+  revengeWinRate(wr: number): string;
+  revengeGotIt: string;
 
   // ---- entry-point toasts (index) -------------------------------------
   reviewReadyToastPrefix(reviewEvery: number): string;

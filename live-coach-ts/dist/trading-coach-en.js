@@ -33,6 +33,22 @@
   };
   var moveOf = (t) => t.direction === "growth" ? (t.closeRate - t.startRate) / t.startRate * 100 : (t.startRate - t.closeRate) / t.startRate * 100;
   var wipe = (m) => m ? 100 / m : 100;
+  var POST_LOSS_MS = 5 * 6e4;
+  var madPct = (a) => {
+    if (a.length < 2) return 0;
+    const m = median(a);
+    if (m <= 0) return 0;
+    return a.reduce((s, v) => s + Math.abs(v - m), 0) / a.length / m * 100;
+  };
+  var restGaps = (trades) => {
+    const b = trades.slice().sort((x, y) => x.startTime - y.startTime);
+    const gaps = [];
+    for (let i = 1; i < b.length; i++) gaps.push(Math.max(0, (b[i].startTime - b[i - 1].closeTime) / 6e4));
+    return gaps;
+  };
+  var postLossTrades = (windowTrades, all) => windowTrades.filter(
+    (tr) => all.some((x) => x.ticket !== tr.ticket && pnl(x) < 0 && x.closeTime <= tr.startTime && tr.startTime - x.closeTime <= POST_LOSS_MS)
+  );
 
   // src/state.ts
   var S = {
@@ -46,7 +62,8 @@
     rot: {},
     bal: 2e4,
     medSum: 0,
-    medDur: 0
+    medDur: 0,
+    reviewReady: false
   };
   function readBalance() {
     try {
@@ -146,12 +163,15 @@
     sec6StopOk: "Stop-loss discipline is fine. ",
     sec6LevHigh: "Leverage is high — easing it would give your margin more room on ordinary swings.",
     sec6LevOk: "Leverage is within reason.",
-    scoreConsistencyLabel: "Consistency",
-    scoreConsistencyNote: (wr, ls) => `win rate ${wr}%, loss streak ${ls}`,
-    scoreDisciplineLabel: "Discipline",
-    scoreDisciplineNote: (sl, mAvg, expo) => `stops ${sl}%, leverage ×${mAvg}, margin ${expo}%`,
-    scoreRationalLabel: "Rational",
-    scoreRationalNote: (rr, rev) => `R:R 1:${rr}, revenge ${rev}`,
+    metricCooldownLabel: "Cooldown between trades",
+    metricCooldownValue: (min) => `${min} min`,
+    metricCooldownNote: "median rest",
+    metricSizeLabel: "Size variance",
+    metricSizeValue: (m) => `±${m}%`,
+    metricSizeNote: (mult) => `margin; leverage ±${mult}%`,
+    metricPostLossLabel: "Post-loss win rate",
+    metricPostLossValue: (wr) => wr == null ? "—" : `${wr}%`,
+    metricPostLossNote: (c) => c > 0 ? `of ${c} trade${c === 1 ? "" : "s"}` : "no such trades",
     habitStop: "set a stop-loss on every trade (mandatory at high leverage)",
     habitLeverage: "lower your leverage — it multiplies the risk of losing your margin",
     habitCutLosses: "cut losses faster and let profits run",
@@ -159,19 +179,27 @@
     // ---- UI chrome ------------------------------------------------------
     greeting: (every, tc, balK) => `I'm your Trading Coach. After every trade — a short factual read; every ${every} trades — a full review of style, risk and habits. Balance ~$${balK}. <b style="color:${tc}">Make your first trade.</b>`,
     openReviewBtn: (every) => `📊 Open the full AI review of ${every} trades`,
-    reviewCountdown: (left, tc, _rs) => `<b style="color:${tc}">${left}</b> more trade${left === 1 ? "" : "s"} to your AI review`,
+    ringLearning: "profile: learning",
+    ringReady: "review ready",
     helpful: "Helpful?",
     thanksUp: "Thanks for the feedback.",
     thanksDown: "Noted.",
     reviewSubtitle: (n) => `review of your last ${n} trades`,
-    scoresHeading: (n) => `Scores over ${n} trades`,
+    metricsHeading: (n) => `Metrics over ${n} trades`,
     habitHeading: (n) => `Habit #1 for the next ${n}:`,
     reviewHelpfulQ: "How helpful was this review?",
     reviewDisclaimer: "AI can make mistakes. A review of behaviour and risk profile, not investment advice.",
     thanksRating: "Thanks for rating.",
     headerStatus: "live • demo account",
     headerWatching: "watching",
-    newTrades: (n) => `new trades: ${n}`,
+    // ---- revenge-trade warning banner -----------------------------------
+    revengeTitle: "Looks like a revenge trade",
+    revengeLev: (cur, prev2) => `higher leverage (×${cur} vs ×${prev2})`,
+    revengeMargin: (curK, prevK) => `bigger margin ($${curK} vs $${prevK})`,
+    revengeAnd: " and ",
+    revengeBody: (min, risk) => `Your previous trade closed at a loss ${min} min ago. This one opened with ${risk}. By timing and risk, this is a revenge trade.`,
+    revengeWinRate: (wr) => `Historically only ${wr}% of your post-loss trades closed in profit.`,
+    revengeGotIt: "Got it",
     // ---- entry-point toasts ---------------------------------------------
     reviewReadyToastPrefix: (every) => `🧠 AI Trading Review of ${every} trades is ready • `,
     tradeToast: (signed, alias) => `Trade ${signed} — ${alias}`
@@ -187,6 +215,17 @@
   var LONG_HOLD_FACTOR = 3;
   var LONG_HOLD_FLOOR_MIN = 30;
   var STREAK_MIN = 3;
+  var REVENGE_RECENT_MS = 5 * 6e4;
+  function detectRevenge(trade, all) {
+    const prevLoss = all.filter((x) => x.ticket !== trade.ticket && pnl(x) < 0 && x.closeTime <= trade.startTime).sort((a, b) => a.closeTime - b.closeTime).pop();
+    if (!prevLoss) return null;
+    const gap = trade.startTime - prevLoss.closeTime;
+    if (gap > REVENGE_RECENT_MS) return null;
+    const higherLev = trade.mult > prevLoss.mult;
+    const biggerMargin = trade.sumInv > prevLoss.sumInv;
+    if (!higherLev && !biggerMargin) return null;
+    return { prevLoss, minutesAfter: Math.max(0, Math.round(gap / 6e4)), higherLev, biggerMargin };
+  }
   var LEVERAGE_BAND_MAX = [10, 50, 150, 500, Infinity];
   function detect(trade, all, list) {
     const out = [];
@@ -327,9 +366,11 @@
     const lwr = lb.length ? Math.round(100 * lb.filter(isWin).length / lb.length) : 0;
     const wr = Math.round(100 * wins.length / n);
     const pctNet = bal ? net / bal * 100 : 0;
-    const disc = Math.max(1, Math.min(10, Math.round(slp / 100 * 5 + (mAvg <= 10 ? 3 : mAvg <= 50 ? 1 : 0) + (expoMax < 20 ? 2 : 0))));
-    const cons = Math.max(1, Math.min(10, Math.round(wr / 10 * 0.6 + (mls <= 2 ? 4 : mls <= 4 ? 2 : 0))));
-    const rat = Math.max(1, Math.min(10, Math.round(10 - Math.min(6, rr) - (revenge > 2 ? 2 : revenge > 0 ? 1 : 0) - (mAvg >= 200 ? 1 : 0))));
+    const coolMed = Math.round(median(restGaps(list)));
+    const marginVar = Math.round(madPct(sums));
+    const multVar = Math.round(madPct(mults));
+    const plTrades = postLossTrades(list, S.baseAll.concat(S.newTrades));
+    const plWR = plTrades.length ? Math.round(100 * plTrades.filter(isWin).length / plTrades.length) : null;
     const styleName = dMed < 3 ? L.styleScalper : dMed < 60 ? L.styleIntraday : dMed < 1440 ? L.styleDaySwing : L.styleSwing;
     const levDesc = L.levDesc(mAvg);
     const concDesc = conc > 60 ? L.concConcentrated(topA, conc) : L.concSpread(nAss);
@@ -377,22 +418,34 @@
         html: (slp < 50 ? L.sec6StopLow : L.sec6StopOk) + (mAvg >= 100 ? L.sec6LevHigh : L.sec6LevOk)
       }
     ];
-    const rrS = rr > 50 ? "∞" : rr.toFixed(1);
-    const scores = [
-      [L.scoreConsistencyLabel, cons, L.scoreConsistencyNote(wr, mls)],
-      [L.scoreDisciplineLabel, disc, L.scoreDisciplineNote(slp, mAvg, expoMax)],
-      [L.scoreRationalLabel, rat, L.scoreRationalNote(rrS, revenge)]
+    const metrics = [
+      { label: L.metricCooldownLabel, value: L.metricCooldownValue(coolMed), note: L.metricCooldownNote },
+      { label: L.metricSizeLabel, value: L.metricSizeValue(marginVar), note: L.metricSizeNote(multVar) },
+      { label: L.metricPostLossLabel, value: L.metricPostLossValue(plWR), note: L.metricPostLossNote(plTrades.length) }
     ];
     const habit = slp < 50 ? L.habitStop : mAvg >= 100 ? L.habitLeverage : rr > 3 ? L.habitCutLosses : L.habitSize;
-    return { list, sections, scores, habit };
+    return { list, sections, metrics, habit };
   }
 
   // src/ui.ts
   var box;
   var pill;
   var elCard;
-  var elCnt;
+  var elState;
+  var elRingPill;
   var elPos;
+  function ringSvg(frac, size, ready) {
+    const r = 15.9155;
+    const pct = Math.max(0, Math.min(100, frac * 100));
+    return `<svg width="${size}" height="${size}" viewBox="0 0 36 36" style="display:block"><circle cx="18" cy="18" r="${r}" fill="none" stroke="${C.rs}" stroke-width="4"/><circle cx="18" cy="18" r="${r}" fill="none" stroke="${C.br}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${pct} 100" transform="rotate(-90 18 18)"${ready ? ` style="filter:drop-shadow(0 0 3px ${C.br})"` : ""}/></svg>`;
+  }
+  function paintRings() {
+    const ready = S.reviewReady;
+    const frac = ready ? 1 : S.newCount % REVIEW_EVERY / REVIEW_EVERY;
+    if (elRingPill) elRingPill.innerHTML = ringSvg(frac, 22, ready);
+    if (elState)
+      elState.innerHTML = `<span style="display:inline-flex">${ringSvg(frac, 16, ready)}</span><span style="color:${ready ? C.br : C.t2}">${ready ? L.ringReady : L.ringLearning}</span>`;
+  }
   function expand() {
     box.style.display = "block";
     box.style.transform = "translateY(-30px) scale(.28)";
@@ -432,7 +485,7 @@
     if (S.idx < 0) S.idx = 0;
     if (S.idx > S.cards.length - 1) S.idx = S.cards.length - 1;
     const c = S.cards[S.idx];
-    const foot = c.review ? `<button id="lbxRev" style="margin-top:14px;margin-left:10px;border:0;cursor:pointer;font:700 14px ${C.font};background:${C.br};color:#000;padding:12px 16px;border-radius:11px;width:calc(100% - 10px)">${L.openReviewBtn(REVIEW_EVERY)}</button>` : c.left ? `<div style="margin-top:14px;margin-left:10px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:6px;background:${C.rs};border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${(REVIEW_EVERY - c.left) / REVIEW_EVERY * 100}%;background:${C.br}"></i></div><span style="font-size:12px;color:${C.t2};white-space:nowrap">${L.reviewCountdown(c.left, C.t, C.rs)}</span></div>` : "";
+    const foot = c.review ? `<button id="lbxRev" style="margin-top:14px;margin-left:10px;border:0;cursor:pointer;font:700 14px ${C.font};background:${C.br};color:#000;padding:12px 16px;border-radius:11px;width:calc(100% - 10px)">${L.openReviewBtn(REVIEW_EVERY)}</button>` : "";
     const feedback = `<div style="margin-top:13px;margin-left:10px;padding-top:11px;border-top:1px solid ${C.line};display:flex;align-items:center;gap:9px"><span style="font-size:11px;color:${C.t2}">${L.helpful}</span><button id="lbxUp" style="border:1px solid ${c.vote === "up" ? C.pos : C.line};background:${c.vote === "up" ? "rgba(83,166,66,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👍</button><button id="lbxDn" style="border:1px solid ${c.vote === "down" ? C.neg : C.line};background:${c.vote === "down" ? "rgba(230,69,69,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👎</button></div>`;
     elCard.innerHTML = `<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><span style="font-size:24px">${c.m}</span><span style="font:400 12px/16px ${C.font};color:${C.t2};background:${C.sf};border:1px solid ${C.line};padding:3px 7px;border-radius:4px">${c.chip}</span><span style="margin-left:auto;font-size:11px;color:${C.t2};font-family:monospace">${c.time}</span></div><div style="font-weight:700;font-size:16px;margin-bottom:8px;border-left:3px solid ${c.a};padding-left:10px;margin-left:-2px">${c.ti}</div><div style="font-size:14px;line-height:1.6;color:#cdd6e4;padding-left:10px">${c.h}</div>` + foot + feedback;
     elPos.textContent = `${S.idx + 1} / ${S.cards.length}`;
@@ -461,6 +514,8 @@
     setTimeout(() => e.remove(), 3200);
   }
   function showReview(r) {
+    S.reviewReady = false;
+    paintRings();
     const o = document.createElement("div");
     o.id = "lbxOverlay";
     o.style.cssText = `position:fixed;inset:0;z-index:2147483002;background:rgba(0,0,0,.65);display:flex;align-items:flex-end;font-family:${C.font}`;
@@ -468,11 +523,11 @@
       const body = s.list ? `<ul style="margin:4px 0 0;padding-left:16px;color:#c4cede;font-size:13px;line-height:1.6">${s.list.map((x) => `<li style="margin-bottom:3px">${x}</li>`).join("")}</ul>` : `<div style="color:#c4cede;font-size:13.5px;line-height:1.6;margin-top:3px">${s.html}</div>`;
       return `<div style="padding:12px 0;border-bottom:1px solid #232323"><div style="font-weight:700;font-size:14.5px">${s.h}</div>${body}</div>`;
     }).join("");
-    const scH = r.scores.map(
-      (s) => `<div style="background:${C.sf};border:1px solid ${C.line};border-radius:12px;padding:11px"><div style="font-size:10px;color:${C.t2};text-transform:uppercase">${s[0]}</div><div style="font:700 22px monospace;margin:3px 0 6px">${s[1]}<span style="font-size:11px;color:${C.t2}">/10</span></div><div style="height:5px;background:${C.rs};border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${s[1] * 10}%;background:${C.br}"></i></div><div style="font-size:9.5px;color:${C.t2};margin-top:6px;line-height:1.3">${s[2]}</div></div>`
+    const scH = r.metrics.map(
+      (m) => `<div style="background:${C.sf};border:1px solid ${C.line};border-radius:12px;padding:11px"><div style="font-size:10px;color:${C.t2};text-transform:uppercase;line-height:1.2">${m.label}</div><div style="font:700 20px monospace;margin:7px 0 4px;color:${C.t}">${m.value}</div><div style="font-size:9.5px;color:${C.t2};line-height:1.3">${m.note}</div></div>`
     ).join("");
     const starsHtml = [0, 1, 2, 3, 4].map((i) => `<span data-i="${i}" style="cursor:pointer;color:${C.t2}">★</span>`).join("");
-    o.innerHTML = `<div style="width:100%;max-height:92vh;overflow:auto;background:linear-gradient(180deg,#1b1b1b,#141414);border-top:1px solid rgba(255,164,8,.5);border-radius:20px 20px 0 0;color:${C.t}"><div style="width:40px;height:5px;border-radius:4px;background:${C.line};margin:9px auto 2px"></div><div style="display:flex;align-items:center;gap:10px;padding:12px 17px;border-bottom:1px solid ${C.line};position:sticky;top:0;background:#191919"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><div><b style="font-size:16px">AI Trading Review</b><div style="font-size:11px;color:${C.t2}">${L.reviewSubtitle(r.list.length)}</div></div><span style="margin-left:auto;cursor:pointer;color:${C.t2};font-size:28px;line-height:1" id="lbxRvX">×</span></div><div style="padding:6px 18px 30px">${secH}<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${C.t2};margin:16px 0 8px">${L.scoresHeading(r.list.length)}</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">${scH}</div><div style="margin-top:16px;background:rgba(255,164,8,.10);border:1px solid rgba(255,164,8,.35);border-radius:12px;padding:13px;font-size:14px"><b style="color:${C.br}">${L.habitHeading(r.list.length)}</b> ${r.habit}.</div><div style="margin-top:16px;text-align:center"><div style="font-size:12px;color:${C.t2};margin-bottom:8px">${L.reviewHelpfulQ}</div><div id="lbxStars" style="display:flex;justify-content:center;gap:7px;font-size:27px">${starsHtml}</div><div id="lbxStarMsg" style="font-size:11px;color:${C.pos};margin-top:7px;height:14px"></div></div><div style="margin-top:14px;font-size:12px;color:${C.t2};font-style:italic">${L.reviewDisclaimer}</div></div></div>`;
+    o.innerHTML = `<div style="width:100%;max-height:92vh;overflow:auto;background:linear-gradient(180deg,#1b1b1b,#141414);border-top:1px solid rgba(255,164,8,.5);border-radius:20px 20px 0 0;color:${C.t}"><div style="width:40px;height:5px;border-radius:4px;background:${C.line};margin:9px auto 2px"></div><div style="display:flex;align-items:center;gap:10px;padding:12px 17px;border-bottom:1px solid ${C.line};position:sticky;top:0;background:#191919"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><div><b style="font-size:16px">AI Trading Review</b><div style="font-size:11px;color:${C.t2}">${L.reviewSubtitle(r.list.length)}</div></div><span style="margin-left:auto;cursor:pointer;color:${C.t2};font-size:28px;line-height:1" id="lbxRvX">×</span></div><div style="padding:6px 18px 30px">${secH}<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${C.t2};margin:16px 0 8px">${L.metricsHeading(r.list.length)}</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">${scH}</div><div style="margin-top:16px;background:rgba(255,164,8,.10);border:1px solid rgba(255,164,8,.35);border-radius:12px;padding:13px;font-size:14px"><b style="color:${C.br}">${L.habitHeading(r.list.length)}</b> ${r.habit}.</div><div style="margin-top:16px;text-align:center"><div style="font-size:12px;color:${C.t2};margin-bottom:8px">${L.reviewHelpfulQ}</div><div id="lbxStars" style="display:flex;justify-content:center;gap:7px;font-size:27px">${starsHtml}</div><div id="lbxStarMsg" style="font-size:11px;color:${C.pos};margin-top:7px;height:14px"></div></div><div style="margin-top:14px;font-size:12px;color:${C.t2};font-style:italic">${L.reviewDisclaimer}</div></div></div>`;
     document.body.appendChild(o);
     o.querySelector("#lbxRvX").onclick = () => o.remove();
     o.onclick = (e) => {
@@ -492,10 +547,20 @@
     o.querySelector("#lbxStars").onmouseleave = () => paint((r.rating || 0) - 1);
     if (r.rating) paint(r.rating - 1);
   }
-  function updateCounter(n) {
-    elCnt.textContent = L.newTrades(n);
-    const pip = pill.querySelector("#lbxPip");
-    if (pip) pip.textContent = String(n);
+  function updateCounter() {
+    paintRings();
+  }
+  function revengeBanner(bodyHtml) {
+    const id = "lbxRevenge";
+    const old = document.getElementById(id);
+    if (old) old.remove();
+    const e = document.createElement("div");
+    e.id = id;
+    e.style.cssText = `position:fixed;left:8px;right:8px;top:10px;z-index:2147483005;background:linear-gradient(180deg,#2a1512,#171717);border:1.5px solid ${C.neg};border-radius:14px;padding:14px 16px;font-family:${C.font};color:${C.t};box-shadow:0 18px 46px -12px rgba(0,0,0,.85),0 0 0 1px rgba(230,69,69,.35)`;
+    e.innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:6px"><span style="font-size:18px">⚠️</span><span>${L.revengeTitle}</span></div><div style="font-size:13.5px;line-height:1.55;color:#e8dcda">${bodyHtml}</div><button id="lbxRevengeOk" style="margin-top:12px;border:0;cursor:pointer;font:700 13px ${C.font};background:${C.neg};color:#fff;padding:9px 16px;border-radius:10px">${L.revengeGotIt}</button>`;
+    document.body.appendChild(e);
+    const ok = e.querySelector("#lbxRevengeOk");
+    if (ok) ok.onclick = () => e.remove();
   }
   function outsideClick(e) {
     if (box.style.display === "none") return;
@@ -506,11 +571,11 @@
   function mount() {
     box = document.createElement("div");
     box.style.cssText = `position:fixed;left:8px;right:8px;bottom:${NAV}px;z-index:2147483000;background:linear-gradient(180deg,#1b1b1b,#141414);border:1px solid rgba(255,164,8,.45);border-radius:18px;box-shadow:0 0 0 1px rgba(255,164,8,.18),0 18px 50px -14px rgba(0,0,0,.85);font-family:${C.font};color:${C.t};overflow:hidden`;
-    box.innerHTML = `<div style="display:flex;align-items:center;gap:9px;padding:12px 13px;border-bottom:1px solid ${C.line};background:linear-gradient(180deg,rgba(255,164,8,.10),transparent)"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;font-weight:800;color:#000;font-size:16px">⛨</div><div style="font-weight:700;font-size:15px;line-height:1.1">Trading Coach<div style="font-weight:500;font-size:11px;color:${C.t2}">${L.headerStatus}</div></div><div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:${C.t2}"><span style="width:8px;height:8px;border-radius:50%;background:${C.pos};box-shadow:0 0 0 4px rgba(83,166,66,.15)"></span>${L.headerWatching}</div><button id="lbxMin" style="width:32px;height:32px;border:0;background:${C.rs};color:${C.t2};cursor:pointer;font-size:18px;border-radius:9px;margin-left:4px">–</button></div><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid ${C.line};color:${C.t2};font-size:12px"><span id="lbxCnt">${L.newTrades(S.newCount)}</span><span style="display:flex;gap:8px;align-items:center"><button id="lbxPrev" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">‹</button><span id="lbxPos" style="min-width:46px;text-align:center;font-family:monospace">–</span><button id="lbxNext" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">›</button></span></div><div id="lbxCard" style="padding:15px 15px 17px;max-height:66vh;overflow:auto"></div>`;
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:9px;padding:12px 13px;border-bottom:1px solid ${C.line};background:linear-gradient(180deg,rgba(255,164,8,.10),transparent)"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;font-weight:800;color:#000;font-size:16px">⛨</div><div style="font-weight:700;font-size:15px;line-height:1.1">Trading Coach<div style="font-weight:500;font-size:11px;color:${C.t2}">${L.headerStatus}</div></div><div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:${C.t2}"><span style="width:8px;height:8px;border-radius:50%;background:${C.pos};box-shadow:0 0 0 4px rgba(83,166,66,.15)"></span>${L.headerWatching}</div><button id="lbxMin" style="width:32px;height:32px;border:0;background:${C.rs};color:${C.t2};cursor:pointer;font-size:18px;border-radius:9px;margin-left:4px">–</button></div><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid ${C.line};color:${C.t2};font-size:12px"><span id="lbxState" style="display:flex;align-items:center;gap:7px"></span><span style="display:flex;gap:8px;align-items:center"><button id="lbxPrev" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">‹</button><span id="lbxPos" style="min-width:46px;text-align:center;font-family:monospace">–</span><button id="lbxNext" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">›</button></span></div><div id="lbxCard" style="padding:15px 15px 17px;max-height:66vh;overflow:auto"></div>`;
     document.body.appendChild(box);
     pill = document.createElement("div");
     pill.style.cssText = `position:fixed;top:116px;right:8px;z-index:2147483000;display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:40px;cursor:grab;background:linear-gradient(180deg,#2a2314,#1b1b1b);border:1.5px solid #FFA408;box-shadow:0 0 0 1px rgba(255,164,8,.30),0 6px 22px -4px rgba(255,164,8,.55),0 12px 34px -12px rgba(0,0,0,.75);font-family:${C.font};color:${C.t};touch-action:none;user-select:none;animation:lbxGlow 2.4s ease-in-out infinite`;
-    pill.innerHTML = `<div style="width:26px;height:26px;border-radius:50%;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><b style="font-size:14px">Coach</b><span id="lbxPip" style="min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:${C.neg};color:#fff;font:700 12px ${C.font};display:inline-flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box">${S.newCount}</span>`;
+    pill.innerHTML = `<div style="width:26px;height:26px;border-radius:50%;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><b style="font-size:14px">Coach</b><span id="lbxRing" style="display:inline-flex;width:22px;height:22px"></span>`;
     document.body.appendChild(pill);
     if (!document.getElementById("lbxGlowKf")) {
       const kf = document.createElement("style");
@@ -522,8 +587,10 @@
     box.style.transformOrigin = "top right";
     pill.style.transition = "transform .36s cubic-bezier(.18,1.6,.35,1),opacity .24s ease";
     elCard = box.querySelector("#lbxCard");
-    elCnt = box.querySelector("#lbxCnt");
+    elState = box.querySelector("#lbxState");
+    elRingPill = pill.querySelector("#lbxRing");
     elPos = box.querySelector("#lbxPos");
+    paintRings();
     box.querySelector("#lbxPrev").onclick = () => {
       S.idx--;
       render();
@@ -600,6 +667,7 @@
     S.medDur = prev.medDur || 0;
     S.rot = prev.rot || {};
     S.bal = prev.bal || 2e4;
+    S.reviewReady = prev.reviewReady || false;
     S.init = true;
   }
   w.__lbxCoach = S;
@@ -607,24 +675,47 @@
   function processTrades(list) {
     const fresh = list.filter((tr) => !S.seen[tr.ticket]).sort((a, b) => a.closeTime - b.closeTime);
     if (!fresh.length) return;
+    let revenge = null;
+    let revengeTrade = null;
     fresh.forEach((tr) => {
       S.seen[tr.ticket] = 1;
+      const all = S.baseAll.concat(S.newTrades);
+      const sig = detectRevenge(tr, all);
+      if (sig) {
+        revenge = sig;
+        revengeTrade = tr;
+      }
       S.newTrades.push(tr);
       S.newCount++;
-      const all = S.baseAll.concat(S.newTrades);
-      const card = buildComment(tr, all, S.newTrades);
-      if (S.newCount % REVIEW_EVERY === 0) card.review = buildReview(S.newTrades.slice(-REVIEW_EVERY));
-      else card.left = REVIEW_EVERY - S.newCount % REVIEW_EVERY;
+      const card = buildComment(tr, all.concat(tr), S.newTrades);
+      if (S.newCount % REVIEW_EVERY === 0) {
+        card.review = buildReview(S.newTrades.slice(-REVIEW_EVERY));
+        S.reviewReady = true;
+      }
       S.cards.push(card);
       S.idx = S.cards.length - 1;
     });
-    updateCounter(S.newCount);
+    updateCounter();
     render();
     const last = fresh[fresh.length - 1], lp = pnl(last);
     toast(
       (S.newCount % REVIEW_EVERY === 0 ? L.reviewReadyToastPrefix(REVIEW_EVERY) : "") + L.tradeToast(sgn(lp), last.alias),
       lp >= 0 ? C.pos : C.neg
     );
+    if (revenge && revengeTrade) showRevenge(revenge, revengeTrade);
+  }
+  function showRevenge(sig, trade) {
+    const parts = [];
+    if (sig.higherLev) parts.push(L.revengeLev(trade.mult, sig.prevLoss.mult));
+    if (sig.biggerMargin) parts.push(L.revengeMargin(fk(trade.sumInv), fk(sig.prevLoss.sumInv)));
+    let body = L.revengeBody(sig.minutesAfter, parts.join(L.revengeAnd));
+    const hist = S.baseAll.concat(S.newTrades);
+    const pl = postLossTrades(hist, hist);
+    if (pl.length >= 5) {
+      const wr = Math.round(100 * pl.filter(isWin).length / pl.length);
+      body += " " + L.revengeWinRate(wr);
+    }
+    revengeBanner(body);
   }
   function poll() {
     readBalance();

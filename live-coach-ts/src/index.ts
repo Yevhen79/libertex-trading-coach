@@ -13,11 +13,13 @@
  */
 
 import { API, REVIEW_EVERY, POLL_MS, C } from "./config";
-import { pnl, sgn, median } from "./format";
+import { pnl, sgn, median, isWin, fk, postLossTrades } from "./format";
 import { S, readBalance } from "./state";
 import { buildComment } from "./comment";
 import { buildReview } from "./review";
-import { mount, unmount, render, toast, updateCounter } from "./ui";
+import { detectRevenge } from "./detect";
+import type { RevengeSignal } from "./detect";
+import { mount, unmount, render, toast, updateCounter, revengeBanner } from "./ui";
 import { L } from "./i18n";
 import type { Trade, ClosedPositionsResponse, CoachWindow } from "./types";
 
@@ -37,6 +39,7 @@ if (prev && prev.init) {
   S.medDur = prev.medDur || 0;
   S.rot = prev.rot || {};
   S.bal = prev.bal || 20000;
+  S.reviewReady = prev.reviewReady || false;
   S.init = true;
 }
 w.__lbxCoach = S;
@@ -49,20 +52,29 @@ function processTrades(list: Trade[]): void {
   const fresh = list.filter((tr) => !S.seen[tr.ticket]).sort((a, b) => a.closeTime - b.closeTime);
   if (!fresh.length) return;
 
+  let revenge: RevengeSignal | null = null; // last matching signal in this batch
+  let revengeTrade: Trade | null = null;
+
   fresh.forEach((tr) => {
     S.seen[tr.ticket] = 1;
+    const all = S.baseAll.concat(S.newTrades); // history BEFORE adding tr — for revenge look-back
+    // Revenge check (post-facto): did this trade escalate risk right after a loss?
+    const sig = detectRevenge(tr, all);
+    if (sig) { revenge = sig; revengeTrade = tr; }
+
     S.newTrades.push(tr);
     S.newCount++;
-    const all = S.baseAll.concat(S.newTrades);
-    const card = buildComment(tr, all, S.newTrades);
-    // Every REVIEW_EVERY trades a full review is attached; otherwise a countdown.
-    if (S.newCount % REVIEW_EVERY === 0) card.review = buildReview(S.newTrades.slice(-REVIEW_EVERY));
-    else card.left = REVIEW_EVERY - (S.newCount % REVIEW_EVERY);
+    const card = buildComment(tr, all.concat(tr), S.newTrades);
+    // Every REVIEW_EVERY trades a full review is attached; the rings signal it.
+    if (S.newCount % REVIEW_EVERY === 0) {
+      card.review = buildReview(S.newTrades.slice(-REVIEW_EVERY));
+      S.reviewReady = true;
+    }
     S.cards.push(card);
     S.idx = S.cards.length - 1;
   });
 
-  updateCounter(S.newCount);
+  updateCounter();
   render();
 
   const last = fresh[fresh.length - 1], lp = pnl(last);
@@ -71,6 +83,25 @@ function processTrades(list: Trade[]): void {
       L.tradeToast(sgn(lp), last.alias),
     lp >= 0 ? C.pos : C.neg,
   );
+
+  if (revenge && revengeTrade) showRevenge(revenge, revengeTrade);
+}
+
+/** Assemble and show the revenge-warning banner from a detected signal. */
+function showRevenge(sig: RevengeSignal, trade: Trade): void {
+  const parts: string[] = [];
+  if (sig.higherLev) parts.push(L.revengeLev(trade.mult, sig.prevLoss.mult));
+  if (sig.biggerMargin) parts.push(L.revengeMargin(fk(trade.sumInv), fk(sig.prevLoss.sumInv)));
+  let body = L.revengeBody(sig.minutesAfter, parts.join(L.revengeAnd));
+
+  // Add the historic post-loss win-rate line only with enough of a sample (≥5).
+  const hist = S.baseAll.concat(S.newTrades);
+  const pl = postLossTrades(hist, hist);
+  if (pl.length >= 5) {
+    const wr = Math.round((100 * pl.filter(isWin).length) / pl.length);
+    body += " " + L.revengeWinRate(wr);
+  }
+  revengeBanner(body);
 }
 
 // 3b. Poll: first call seeds the baseline, subsequent calls process new trades.

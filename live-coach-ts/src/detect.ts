@@ -34,6 +34,40 @@ export const LONG_HOLD_FLOOR_MIN = 30;
 export const STREAK_MIN = 3;
 
 /**
+ * RULE "revenge warning" (the hard, banner-triggering one): a trade opened
+ * within this window after a loss closed AND carrying more risk than that loss.
+ * Tighter than REVENGE_WINDOW_MS, which only powers the soft in-card note.
+ */
+export const REVENGE_RECENT_MS = 5 * 60000; // 5 minutes
+
+/** What a revenge warning is made of — the prior loss and how this trade escalated. */
+export interface RevengeSignal {
+  prevLoss: Trade;
+  minutesAfter: number;
+  higherLev: boolean;     // this trade's leverage exceeds the loss's
+  biggerMargin: boolean;  // this trade's margin exceeds the loss's
+}
+
+/**
+ * Post-facto revenge check for ONE trade: was it opened within 5 min of a loss
+ * closing, with higher leverage OR bigger margin than that loss? Returns the
+ * signal (for the banner) or null. Never blocks anything — detection only.
+ */
+export function detectRevenge(trade: Trade, all: Trade[]): RevengeSignal | null {
+  const prevLoss = all
+    .filter((x) => x.ticket !== trade.ticket && pnl(x) < 0 && x.closeTime <= trade.startTime)
+    .sort((a, b) => a.closeTime - b.closeTime)
+    .pop();
+  if (!prevLoss) return null;
+  const gap = trade.startTime - prevLoss.closeTime;
+  if (gap > REVENGE_RECENT_MS) return null;
+  const higherLev = trade.mult > prevLoss.mult;
+  const biggerMargin = trade.sumInv > prevLoss.sumInv;
+  if (!higherLev && !biggerMargin) return null;
+  return { prevLoss, minutesAfter: Math.max(0, Math.round(gap / 60000)), higherLev, biggerMargin };
+}
+
+/**
  * Leverage band boundaries (logic only — the wording lives in L.leverageBands).
  * `mult ≤ max` picks the band index; `wp` = adverse move (%) that wipes the
  * position (100 / mult). Bands escalate 1‑10 / 11‑50 / 51‑150 / 151‑500 / >500.

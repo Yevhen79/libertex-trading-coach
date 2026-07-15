@@ -8,7 +8,7 @@ import type { CoachState } from "./types";
 /** The one and only coach state. Restored from a previous inject in index.ts. */
 export const S: CoachState = {
   seen: {}, cards: [], idx: 0, newCount: 0, newTrades: [], baseAll: [],
-  init: false, rot: {}, bal: 20000, medSum: 0, medDur: 0,
+  init: false, rot: {}, bal: 20000, medSum: 0, medDur: 0, reviewReady: false,
 };
 
 /**

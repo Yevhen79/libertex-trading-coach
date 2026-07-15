@@ -48,3 +48,37 @@ export const plural = (n: number): string => {
   const a = n % 100, b = n % 10;
   return a > 10 && a < 20 ? "сделок" : b === 1 ? "сделка" : b >= 2 && b <= 4 ? "сделки" : "сделок";
 };
+
+// ---- timestamp / dispersion helpers (used by the review metrics) --------
+
+/** Window (ms) after a loss closes within which a new trade counts as "post-loss". */
+export const POST_LOSS_MS = 5 * 60000;
+
+/**
+ * Mean absolute deviation from the median, as % of the median. A simple,
+ * outlier-robust "how spread out are these" number (0 if <2 values or median≤0).
+ */
+export const madPct = (a: number[]): number => {
+  if (a.length < 2) return 0;
+  const m = median(a);
+  if (m <= 0) return 0;
+  return (a.reduce((s, v) => s + Math.abs(v - m), 0) / a.length / m) * 100;
+};
+
+/** Rest gaps (minutes) between consecutive trades: open_i − close_(i−1), floored at 0. */
+export const restGaps = (trades: Trade[]): number[] => {
+  const b = trades.slice().sort((x, y) => x.startTime - y.startTime);
+  const gaps: number[] = [];
+  for (let i = 1; i < b.length; i++) gaps.push(Math.max(0, (b[i].startTime - b[i - 1].closeTime) / 60000));
+  return gaps;
+};
+
+/**
+ * Trades from `windowTrades` opened within POST_LOSS_MS after ANY loss in `all`
+ * closed — i.e. trades taken "in the heat" right after a loss. The caller derives
+ * a win rate from the returned set.
+ */
+export const postLossTrades = (windowTrades: Trade[], all: Trade[]): Trade[] =>
+  windowTrades.filter((tr) =>
+    all.some((x) => x.ticket !== tr.ticket && pnl(x) < 0 && x.closeTime <= tr.startTime && tr.startTime - x.closeTime <= POST_LOSS_MS),
+  );

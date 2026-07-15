@@ -40,12 +40,19 @@ export interface TradeCard {
   chip: string;          // instrument alias
   time: string;          // formatted close time
   review?: ReviewData;   // present on every Nth card
-  left?: number;         // trades left until the next review
   vote?: Vote;           // 👍 / 👎 feedback
 }
 
-/** A score tile in the review: [label, value 1..10, short note]. */
-export type ReviewScore = [label: string, value: number, note: string];
+/**
+ * A raw metric tile in the review: a measured behavioural number, not a 1..10
+ * score. `value` is the headline (e.g. "4 мин", "±38%", "32%"); `note` is the
+ * one-line context under it.
+ */
+export interface ReviewMetric {
+  label: string;
+  value: string;
+  note: string;
+}
 
 /** One section of the review — either free prose (`html`) or a bullet `list`. */
 export interface ReviewSection {
@@ -58,7 +65,7 @@ export interface ReviewSection {
 export interface ReviewData {
   list: Trade[];
   sections: ReviewSection[];
-  scores: ReviewScore[];
+  metrics: ReviewMetric[];
   habit: string;
   rating?: number;       // ⭐ 1..5 the user gave the review
 }
@@ -76,6 +83,7 @@ export interface CoachState {
   bal: number;                 // last known free balance
   medSum: number;              // median margin across the baseline
   medDur: number;              // median hold time (min) across the baseline
+  reviewReady: boolean;        // a full review is waiting to be opened (rings full + glow)
 }
 
 /** `window` extended with the coach's globals. */

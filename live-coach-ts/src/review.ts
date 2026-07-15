@@ -9,9 +9,9 @@
  * spell out exactly what pushes each up or down. Copy is localised via `t`.
  */
 
-import type { Trade, ReviewData, ReviewSection, ReviewScore } from "./types";
+import type { Trade, ReviewData, ReviewSection, ReviewMetric } from "./types";
 import { C } from "./config";
-import { pnl, isWin, isLoss, sum, fmt, sgn, fk, median } from "./format";
+import { pnl, isWin, isLoss, sum, fmt, sgn, fk, median, madPct, restGaps, postLossTrades } from "./format";
 import { S, readBalance } from "./state";
 import { L } from "./i18n";
 
@@ -86,21 +86,21 @@ export function buildReview(list: Trade[]): ReviewData {
   const wr = Math.round((100 * wins.length) / n);                                      // window win rate
   const pctNet = bal ? (net / bal) * 100 : 0;
 
-  // ---- SCORES (1..10) — this is the part worth tuning ------------------
+  // ---- METRICS (raw behavioural numbers, from timestamps & sizes) ------
   //
-  // DISCIPLINE: rewards using stops, punishes high leverage & big exposure.
-  //   base = stop-usage% × 5 (100% stops ⇒ +5)
-  //   + leverage bonus: ×≤10 ⇒ +3, ×≤50 ⇒ +1, else 0
-  //   + exposure bonus: largest position < 20% of deposit ⇒ +2
-  const disc = Math.max(1, Math.min(10, Math.round((slp / 100) * 5 + (mAvg <= 10 ? 3 : mAvg <= 50 ? 1 : 0) + (expoMax < 20 ? 2 : 0))));
+  // COOLDOWN: median rest gap between consecutive trades (open − previous close).
+  //   A low median = trading back-to-back with little pause between decisions.
+  const coolMed = Math.round(median(restGaps(list)));
   //
-  // CONSISTENCY: rewards win rate, punishes long losing streaks.
-  //   base = winRate/10 × 0.6  + streak bonus: ≤2 losses in a row ⇒ +4, ≤4 ⇒ +2, else 0
-  const cons = Math.max(1, Math.min(10, Math.round((wr / 10) * 0.6 + (mls <= 2 ? 4 : mls <= 4 ? 2 : 0))));
+  // SIZE VARIANCE: how much margin and leverage swing around their own median
+  //   (mean absolute deviation, % of median). High = erratic position sizing.
+  const marginVar = Math.round(madPct(sums));
+  const multVar = Math.round(madPct(mults));
   //
-  // RATIONALITY: starts at 10, subtracts for a bad reward:risk, revenge trades
-  //   and very high average leverage.
-  const rat = Math.max(1, Math.min(10, Math.round(10 - Math.min(6, rr) - (revenge > 2 ? 2 : revenge > 0 ? 1 : 0) - (mAvg >= 200 ? 1 : 0))));
+  // POST-LOSS WIN RATE: of trades opened within 5 min of a loss closing, what
+  //   share actually won. Measured against the full history for context.
+  const plTrades = postLossTrades(list, S.baseAll.concat(S.newTrades));
+  const plWR = plTrades.length ? Math.round((100 * plTrades.filter(isWin).length) / plTrades.length) : null;
 
   // ---- verbal buckets ---------------------------------------------------
   const styleName = dMed < 3 ? L.styleScalper
@@ -160,11 +160,10 @@ export function buildReview(list: Trade[]): ReviewData {
     },
   ];
 
-  const rrS = rr > 50 ? "∞" : rr.toFixed(1);
-  const scores: ReviewScore[] = [
-    [L.scoreConsistencyLabel, cons, L.scoreConsistencyNote(wr, mls)],
-    [L.scoreDisciplineLabel, disc, L.scoreDisciplineNote(slp, mAvg, expoMax)],
-    [L.scoreRationalLabel, rat, L.scoreRationalNote(rrS, revenge)],
+  const metrics: ReviewMetric[] = [
+    { label: L.metricCooldownLabel, value: L.metricCooldownValue(coolMed), note: L.metricCooldownNote },
+    { label: L.metricSizeLabel, value: L.metricSizeValue(marginVar), note: L.metricSizeNote(multVar) },
+    { label: L.metricPostLossLabel, value: L.metricPostLossValue(plWR), note: L.metricPostLossNote(plTrades.length) },
   ];
 
   // "Habit #1" — the single most useful thing to fix next, chosen by priority.
@@ -173,5 +172,5 @@ export function buildReview(list: Trade[]): ReviewData {
     : rr > 3 ? L.habitCutLosses
     : L.habitSize;
 
-  return { list, sections, scores, habit };
+  return { list, sections, metrics, habit };
 }

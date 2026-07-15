@@ -102,12 +102,15 @@ export const en: Copy = {
   sec6LevHigh: "Leverage is high — easing it would give your margin more room on ordinary swings.",
   sec6LevOk: "Leverage is within reason.",
 
-  scoreConsistencyLabel: "Consistency",
-  scoreConsistencyNote: (wr, ls) => `win rate ${wr}%, loss streak ${ls}`,
-  scoreDisciplineLabel: "Discipline",
-  scoreDisciplineNote: (sl, mAvg, expo) => `stops ${sl}%, leverage ×${mAvg}, margin ${expo}%`,
-  scoreRationalLabel: "Rational",
-  scoreRationalNote: (rr, rev) => `R:R 1:${rr}, revenge ${rev}`,
+  metricCooldownLabel: "Cooldown between trades",
+  metricCooldownValue: (min) => `${min} min`,
+  metricCooldownNote: "median rest",
+  metricSizeLabel: "Size variance",
+  metricSizeValue: (m) => `±${m}%`,
+  metricSizeNote: (mult) => `margin; leverage ±${mult}%`,
+  metricPostLossLabel: "Post-loss win rate",
+  metricPostLossValue: (wr) => (wr == null ? "—" : `${wr}%`),
+  metricPostLossNote: (c) => (c > 0 ? `of ${c} trade${c === 1 ? "" : "s"}` : "no such trades"),
 
   habitStop: "set a stop-loss on every trade (mandatory at high leverage)",
   habitLeverage: "lower your leverage — it multiplies the risk of losing your margin",
@@ -118,20 +121,29 @@ export const en: Copy = {
   greeting: (every, tc, balK) =>
     `I'm your Trading Coach. After every trade — a short factual read; every ${every} trades — a full review of style, risk and habits. Balance ~$${balK}. <b style="color:${tc}">Make your first trade.</b>`,
   openReviewBtn: (every) => `📊 Open the full AI review of ${every} trades`,
-  reviewCountdown: (left, tc, _rs) =>
-    `<b style="color:${tc}">${left}</b> more trade${left === 1 ? "" : "s"} to your AI review`,
+  ringLearning: "profile: learning",
+  ringReady: "review ready",
   helpful: "Helpful?",
   thanksUp: "Thanks for the feedback.",
   thanksDown: "Noted.",
   reviewSubtitle: (n) => `review of your last ${n} trades`,
-  scoresHeading: (n) => `Scores over ${n} trades`,
+  metricsHeading: (n) => `Metrics over ${n} trades`,
   habitHeading: (n) => `Habit #1 for the next ${n}:`,
   reviewHelpfulQ: "How helpful was this review?",
   reviewDisclaimer: "AI can make mistakes. A review of behaviour and risk profile, not investment advice.",
   thanksRating: "Thanks for rating.",
   headerStatus: "live • demo account",
   headerWatching: "watching",
-  newTrades: (n) => `new trades: ${n}`,
+
+  // ---- revenge-trade warning banner -----------------------------------
+  revengeTitle: "Looks like a revenge trade",
+  revengeLev: (cur, prev) => `higher leverage (×${cur} vs ×${prev})`,
+  revengeMargin: (curK, prevK) => `bigger margin ($${curK} vs $${prevK})`,
+  revengeAnd: " and ",
+  revengeBody: (min, risk) =>
+    `Your previous trade closed at a loss ${min} min ago. This one opened with ${risk}. By timing and risk, this is a revenge trade.`,
+  revengeWinRate: (wr) => `Historically only ${wr}% of your post-loss trades closed in profit.`,
+  revengeGotIt: "Got it",
 
   // ---- entry-point toasts ---------------------------------------------
   reviewReadyToastPrefix: (every) => `🧠 AI Trading Review of ${every} trades is ready • `,
