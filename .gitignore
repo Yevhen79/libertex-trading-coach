@@ -5,3 +5,7 @@ desktop.ini
 *.tmp
 .vscode/
 .idea/
+
+# Node
+node_modules/
+
