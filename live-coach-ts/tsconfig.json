@@ -1,17 +1,17 @@
 {
   "compilerOptions": {
     "target": "ES2019",
-    "module": "none",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "lib": ["DOM", "DOM.Iterable", "ES2019"],
     "strict": true,
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
-    "removeComments": true,
-    "newLine": "lf",
-    "outDir": "dist",
-    "rootDir": "src"
+    "skipLibCheck": true,
+    "noEmit": true
   },
   "include": ["src/**/*.ts"]
 }

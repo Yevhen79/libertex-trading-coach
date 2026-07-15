@@ -1,30 +1,46 @@
 # Libertex Trading Coach — TypeScript source
 
-Читаемый, типизированный исходник поведенческого коуча **Guardian**, который
-вставляется в консоль веб-терминала Libertex. Компилируется в один
-self-executing JS-файл — точно такой же по поведению, как рукописный
-`../live-coach/trading-coach-inject.js`, но с типами, именованными функциями,
-комментариями и шаблонными литералами вместо конкатенации строк.
+Читаемый, типизированный и **модульный** исходник поведенческого коуча **Guardian**,
+который вставляется в консоль веб-терминала Libertex. Разбит на три слоя —
+**данные / алгоритм / визуальная часть** — и собирается esbuild в один
+self-executing JS-файл, идентичный по поведению рукописному
+`../live-coach/trading-coach-inject.js`.
 
 ## Структура
 
 ```
 live-coach-ts/
-├─ src/trading-coach-inject.ts   ← читаемый TypeScript-исходник (правим здесь)
-├─ dist/trading-coach-inject.js  ← скомпилированный файл для вставки в консоль
-├─ tsconfig.json                 ← настройки компиляции (strict, module:none → скрипт-IIFE)
+├─ src/
+│  ├─ types.ts      ← ДАННЫЕ: все интерфейсы/типы (Trade, CoachState, ReviewData…)
+│  ├─ config.ts     ← глобальные настройки (API, REVIEW_EVERY, палитра, POLL_MS, NAV)
+│  ├─ format.ts     ← чистые числовые/строковые хелперы (pnl, fmt, sgn, median…)
+│  ├─ state.ts      ← общее изменяемое состояние S + readBalance + rotate
+│  ├─ messages.ts   ← КОПИРАЙТ: тексты (LOSS/WIN) и слова величины (magW/magWW)
+│  ├─ detect.ts     ← АЛГОРИТМ: поведенческие правила по сделке (+ пороги, комментарии)
+│  ├─ comment.ts    ← АЛГОРИТМ: сборка карточки разбора из одной сделки
+│  ├─ review.ts     ← АЛГОРИТМ: N-сделочный разбор + формулы скоров (комментарии)
+│  ├─ ui.ts         ← ВИЗУАЛ: окно, плашка, рендер, разбор, анимация, drag
+│  └─ index.ts      ← точка входа: restore state → mount → poll-цикл → start
+├─ dist/trading-coach-inject.js  ← собранный файл для вставки в консоль
+├─ tsconfig.json                 ← проверка типов (strict; noEmit — сборка через esbuild)
 ├─ package.json                  ← npm-скрипты
 └─ README.md
 ```
 
+**Где искать правила.** Каждое поведенческое правило — это один `if`/порог в
+`detect.ts` (паттерны по сделке) или формула в `review.ts` (скоры). Рядом с
+каждым правилом стоит комментарий `// RULE — …` и именованная константа порога,
+так что правило легко найти по тексту и понять, на что оно влияет.
+
 ## Сборка
 
-Нужен Node.js (проверено на портативном Node 22) и TypeScript.
+Нужен Node.js (проверено на портативном Node 22).
 
 ```bash
-npm install        # поставить typescript (один dev-зависимость)
-npm run build      # tsc → dist/trading-coach-inject.js
-npm run typecheck  # проверка типов без вывода (strict)
+npm install        # esbuild + typescript
+npm run build      # esbuild: бандлит src/index.ts → dist/trading-coach-inject.js
+npm run typecheck  # tsc --noEmit: строгая проверка типов
+npm run check      # typecheck + build
 npm run watch      # пересборка на каждое изменение
 ```
 
@@ -32,36 +48,39 @@ npm run watch      # пересборка на каждое изменение
 
 ```bash
 export PATH="/c/Users/shakotko-ea/node22:$PATH"
-npm install && npm run build
+cd guardian-angel-libertex/live-coach-ts
+npm install && npm run check
 ```
 
 ## Использование
 
-1. `npm run build` → получаем `dist/trading-coach-inject.js`.
-2. Открыть `https://app.libertex.org` (или `/m` мобильный вид), залогиниться,
-   выбрать нужный счёт.
-3. DevTools → Console → (если Chrome ругается на вставку) напечатать
-   `разрешить вставку` / `allow pasting` → Enter.
+1. `npm run build` → `dist/trading-coach-inject.js`.
+2. Открыть `https://app.libertex.org` (или `/m`), залогиниться, выбрать счёт.
+3. DevTools → Console → (если Chrome ругается) напечатать `разрешить вставку` → Enter.
 4. Вставить содержимое `dist/trading-coach-inject.js` → Enter.
-5. Появляется виджет «Trading Coach». Он берёт baseline из текущей истории и
-   реагирует на сделки, которые ты закрываешь дальше. Раз в 5 сделок — полный
-   AI-разбор со скорами.
+5. Появляется виджет «Trading Coach». Раз в 5 сделок — полный AI-разбор со скорами.
 
-> Виджет живёт в памяти страницы. Hard reload (F5) убирает его — просто вставь заново.
+> Виджет живёт в памяти страницы. Hard reload (F5) убирает его — вставь заново.
 
-## Почему `module: "none"`
+## Почему esbuild
 
-Исходник — один файл без `import`/`export`, обёрнутый в самозапускающийся IIFE.
-`tsc` с `module: "none"` стирает типы/интерфейсы и выдаёт обычный скрипт, который
+Исходник — это ES-модули с `import`/`export` (для наглядности разбит по файлам).
+`esbuild --bundle --format=iife` собирает их в один самозапускающийся IIFE, который
 исполняется сразу при вставке в консоль и ничего не оставляет в глобальной области
-страницы (всё живёт внутри замыкания). Бандлер не нужен — одна зависимость `typescript`.
+страницы. `tsc` при этом только проверяет типы (`--noEmit`), сборку делает esbuild —
+быстро и без промежуточных файлов.
 
 ## Что менять
 
-- Тексты сообщений: массивы `LOSS` / `WIN`, функции `magW` / `magWW`, секции в `review()`.
-- Каденция разбора: константа `REVIEW_EVERY` (сейчас 5).
-- Цвета/стиль: объект `C` (палитра) и CSS в `box`/`pill`/`render`/`showReview`.
-- Пороги риска: бэнды плеча в `detect()`, формулы скоров в `review()`.
+- **Каденция разбора:** `REVIEW_EVERY` в `config.ts` (сейчас 5).
+- **Тексты/тон:** массивы `LOSS`/`WIN` и `magW`/`magWW` в `messages.ts`.
+- **Цвета/стиль:** объект `C` в `config.ts` и разметка в `ui.ts`.
+- **Поведенческие пороги:** константы в начале `detect.ts` (`REVENGE_WINDOW_MS`,
+  `CONCENTRATION_PCT`, `LEVERAGE_BANDS`, …).
+- **Формулы скоров:** блок `SCORES` в `review.ts` (Дисциплина / Консистентность /
+  Рациональность) — каждая формула прокомментирована.
 
-Оригинальный рукописный JS (`../live-coach/trading-coach-inject.js`) оставлен как
-есть — это два независимых артефакта с идентичным поведением.
+Поведение сборки сверено с рукописным JS (копирайт, id, цвета и числовые пороги
+идентичны; runtime-монтаж проверен). Оригинальный
+`../live-coach/trading-coach-inject.js` оставлен как есть — это два независимых
+артефакта с одинаковым поведением.

@@ -2,13 +2,15 @@
   "name": "libertex-trading-coach",
   "version": "2.2.0",
   "private": true,
-  "description": "Guardian — behavioural trading coach injected into the Libertex web terminal. Readable TypeScript source that compiles to a single self-executing JS bundle for the browser console.",
+  "description": "Guardian — behavioural trading coach injected into the Libertex web terminal. Modular, typed TypeScript source (data / algorithm / UI) that esbuild bundles into a single self-executing JS for the browser console.",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "build": "esbuild src/index.ts --bundle --format=iife --target=es2019 --charset=utf8 --legal-comments=none --outfile=dist/trading-coach-inject.js",
+    "check": "npm run typecheck && npm run build",
+    "watch": "esbuild src/index.ts --bundle --format=iife --target=es2019 --charset=utf8 --outfile=dist/trading-coach-inject.js --watch"
   },
   "devDependencies": {
+    "esbuild": "^0.24.2",
     "typescript": "^5.6.3"
   }
 }

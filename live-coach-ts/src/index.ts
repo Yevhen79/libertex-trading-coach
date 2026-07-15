@@ -1,0 +1,105 @@
+/*
+ * ENTRY POINT — wires the layers together and starts the coach.
+ * =============================================================
+ * Flow:
+ *   1. Tear down any previous inject and restore its state (seamless re-paste).
+ *   2. Mount the UI.
+ *   3. Poll the closed-positions feed every POLL_MS; the first poll seeds a
+ *      baseline (existing history is NOT "new"), later polls process new trades.
+ *   4. Expose window.__lbxCoachStop so a re-inject can clean up.
+ *
+ * esbuild bundles this file (and everything it imports) into a single
+ * self-executing IIFE — the file you paste into the browser console.
+ */
+
+import { API, REVIEW_EVERY, POLL_MS, C } from "./config";
+import { pnl, sgn, median } from "./format";
+import { S, readBalance } from "./state";
+import { buildComment } from "./comment";
+import { buildReview } from "./review";
+import { mount, unmount, render, toast, updateCounter } from "./ui";
+import type { Trade, ClosedPositionsResponse, CoachWindow } from "./types";
+
+const w = window as unknown as CoachWindow;
+
+// 1. Remove a previous instance and carry its state over.
+const prev = w.__lbxCoach;
+try { if (w.__lbxCoachStop) w.__lbxCoachStop(); } catch { /* ignore */ }
+if (prev && prev.init) {
+  S.seen = prev.seen || {};
+  S.cards = prev.cards || [];
+  S.idx = prev.idx || 0;
+  S.newCount = prev.newCount || 0;
+  S.newTrades = prev.newTrades || [];
+  S.baseAll = prev.baseAll || [];
+  S.medSum = prev.medSum || 0;
+  S.medDur = prev.medDur || 0;
+  S.rot = prev.rot || {};
+  S.bal = prev.bal || 20000;
+  S.init = true;
+}
+w.__lbxCoach = S;
+
+// 2. Mount the UI (creates the window + pill, wires interactions).
+mount();
+
+// 3a. Turn newly-closed trades into cards, fire a toast, refresh the view.
+function processTrades(list: Trade[]): void {
+  const fresh = list.filter((t) => !S.seen[t.ticket]).sort((a, b) => a.closeTime - b.closeTime);
+  if (!fresh.length) return;
+
+  fresh.forEach((t) => {
+    S.seen[t.ticket] = 1;
+    S.newTrades.push(t);
+    S.newCount++;
+    const all = S.baseAll.concat(S.newTrades);
+    const card = buildComment(t, all, S.newTrades);
+    // Every REVIEW_EVERY trades a full review is attached; otherwise a countdown.
+    if (S.newCount % REVIEW_EVERY === 0) card.review = buildReview(S.newTrades.slice(-REVIEW_EVERY));
+    else card.left = REVIEW_EVERY - (S.newCount % REVIEW_EVERY);
+    S.cards.push(card);
+    S.idx = S.cards.length - 1;
+  });
+
+  updateCounter(S.newCount);
+  render();
+
+  const last = fresh[fresh.length - 1], lp = pnl(last);
+  toast(
+    (S.newCount % REVIEW_EVERY === 0 ? `🧠 Готов AI Trading Review ${REVIEW_EVERY} сделок! • ` : "") +
+      `Сделка ${sgn(lp)} — ${last.alias}`,
+    lp >= 0 ? C.pos : C.neg,
+  );
+}
+
+// 3b. Poll: first call seeds the baseline, subsequent calls process new trades.
+function poll(): void {
+  readBalance();
+  fetch(API, { headers: { Accept: "application/json" }, credentials: "include" })
+    .then((r) => r.json())
+    .then((j: ClosedPositionsResponse) => {
+      const list = (j && j.result && j.result.closed) || [];
+      if (!S.init) {
+        S.init = true;
+        list.forEach((t) => (S.seen[t.ticket] = 1));
+        S.baseAll = list.slice();
+        S.medSum = median(list.map((t) => t.sumInv));
+        S.medDur = median(list.map((t) => (t.closeTime - t.startTime) / 60000));
+        render();
+      } else {
+        processTrades(list);
+      }
+    })
+    .catch(() => { /* offline / transient — ignore */ });
+}
+
+// 4. Start.
+render();
+poll();
+const iv = setInterval(poll, POLL_MS);
+w.__lbxCoachStop = () => {
+  clearInterval(iv);
+  unmount();
+};
+
+console.info(`[Trading Coach] v2.2 injected; carried ${S.newCount} trades`);
