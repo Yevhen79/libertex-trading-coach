@@ -13,6 +13,7 @@
 import { C, REVIEW_EVERY, NAV } from "./config";
 import { fk, plural } from "./format";
 import { S, readBalance } from "./state";
+import { t } from "./i18n";
 import type { ReviewData } from "./types";
 
 let box!: HTMLDivElement;
@@ -48,7 +49,7 @@ function collapse(): void {
 // ---- card renderer -----------------------------------------------------
 export function render(): void {
   if (!S.cards.length) {
-    elCard.innerHTML = `<div style="color:${C.t2};font-size:14px;line-height:1.55">Привет 👋 Я твой Trading Coach. После каждой сделки дам короткий честный разбор, а раз в ${REVIEW_EVERY} сделок — полный обзор твоего стиля, риска и привычек с оценками. Баланс ~$${fk(readBalance())}. <b style="color:${C.t}">Сделай первую сделку — и поехали.</b></div>`;
+    elCard.innerHTML = `<div style="color:${C.t2};font-size:14px;line-height:1.55">${t(`Привет 👋 Я твой Trading Coach. После каждой сделки дам короткий честный разбор, а раз в ${REVIEW_EVERY} сделок — полный обзор твоего стиля, риска и привычек с оценками. Баланс ~$${fk(readBalance())}. <b style="color:${C.t}">Сделай первую сделку — и поехали.</b>`, `Hi 👋 I'm your Trading Coach. After every trade I'll give a short, honest read, and every ${REVIEW_EVERY} trades a full review of your style, risk and habits with scores. Balance ~$${fk(readBalance())}. <b style="color:${C.t}">Make your first trade and we're off.</b>`)}</div>`;
     elPos.textContent = "–";
     return;
   }
@@ -58,11 +59,11 @@ export function render(): void {
 
   // Footer: either the "open review" button, or the countdown to the next review.
   const foot = c.review
-    ? `<button id="lbxRev" style="margin-top:14px;margin-left:10px;border:0;cursor:pointer;font:700 14px ${C.font};background:${C.br};color:#000;padding:12px 16px;border-radius:11px;width:calc(100% - 10px)">📊 Открыть подробный AI-разбор ${REVIEW_EVERY} сделок</button>`
+    ? `<button id="lbxRev" style="margin-top:14px;margin-left:10px;border:0;cursor:pointer;font:700 14px ${C.font};background:${C.br};color:#000;padding:12px 16px;border-radius:11px;width:calc(100% - 10px)">${t(`📊 Открыть подробный AI-разбор ${REVIEW_EVERY} сделок`, `📊 Open the full AI review of ${REVIEW_EVERY} trades`)}</button>`
     : c.left
-      ? `<div style="margin-top:14px;margin-left:10px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:6px;background:${C.rs};border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${((REVIEW_EVERY - c.left) / REVIEW_EVERY) * 100}%;background:${C.br}"></i></div><span style="font-size:12px;color:${C.t2};white-space:nowrap">ещё <b style="color:${C.t}">${c.left}</b> ${plural(c.left)} до AI-разбора</span></div>`
+      ? `<div style="margin-top:14px;margin-left:10px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:6px;background:${C.rs};border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${((REVIEW_EVERY - c.left) / REVIEW_EVERY) * 100}%;background:${C.br}"></i></div><span style="font-size:12px;color:${C.t2};white-space:nowrap">${t(`ещё <b style="color:${C.t}">${c.left}</b> ${plural(c.left)} до AI-разбора`, `<b style="color:${C.t}">${c.left}</b> more trade${c.left === 1 ? "" : "s"} to your AI review`)}</span></div>`
       : "";
-  const feedback = `<div style="margin-top:13px;margin-left:10px;padding-top:11px;border-top:1px solid ${C.line};display:flex;align-items:center;gap:9px"><span style="font-size:11px;color:${C.t2}">Полезно?</span><button id="lbxUp" style="border:1px solid ${c.vote === "up" ? C.pos : C.line};background:${c.vote === "up" ? "rgba(83,166,66,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👍</button><button id="lbxDn" style="border:1px solid ${c.vote === "down" ? C.neg : C.line};background:${c.vote === "down" ? "rgba(230,69,69,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👎</button></div>`;
+  const feedback = `<div style="margin-top:13px;margin-left:10px;padding-top:11px;border-top:1px solid ${C.line};display:flex;align-items:center;gap:9px"><span style="font-size:11px;color:${C.t2}">${t("Полезно?", "Helpful?")}</span><button id="lbxUp" style="border:1px solid ${c.vote === "up" ? C.pos : C.line};background:${c.vote === "up" ? "rgba(83,166,66,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👍</button><button id="lbxDn" style="border:1px solid ${c.vote === "down" ? C.neg : C.line};background:${c.vote === "down" ? "rgba(230,69,69,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👎</button></div>`;
 
   elCard.innerHTML =
     `<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><span style="font-size:24px">${c.m}</span><span style="font:400 12px/16px ${C.font};color:${C.t2};background:${C.sf};border:1px solid ${C.line};padding:3px 7px;border-radius:4px">${c.chip}</span><span style="margin-left:auto;font-size:11px;color:${C.t2};font-family:monospace">${c.time}</span></div><div style="font-weight:700;font-size:16px;margin-bottom:8px;border-left:3px solid ${c.a};padding-left:10px;margin-left:-2px">${c.ti}</div><div style="font-size:14px;line-height:1.6;color:#cdd6e4;padding-left:10px">${c.h}</div>` +
@@ -73,8 +74,8 @@ export function render(): void {
   if (rv) rv.onclick = () => { if (c.review) showReview(c.review); };
   const up = box.querySelector("#lbxUp") as HTMLElement | null;
   const dn = box.querySelector("#lbxDn") as HTMLElement | null;
-  if (up) up.onclick = () => { c.vote = "up"; render(); toast("Спасибо за отзыв! 👍", C.pos); };
-  if (dn) dn.onclick = () => { c.vote = "down"; render(); toast("Понял, спасибо 👎", C.t2); };
+  if (up) up.onclick = () => { c.vote = "up"; render(); toast(t("Спасибо за отзыв! 👍", "Thanks for the feedback! 👍"), C.pos); };
+  if (dn) dn.onclick = () => { c.vote = "down"; render(); toast(t("Понял, спасибо 👎", "Got it, thanks 👎"), C.t2); };
 }
 
 // ---- transient toast ---------------------------------------------------
@@ -112,7 +113,7 @@ export function showReview(r: ReviewData): void {
     .map((i) => `<span data-i="${i}" style="cursor:pointer;color:${C.t2}">★</span>`)
     .join("");
 
-  o.innerHTML = `<div style="width:100%;max-height:92vh;overflow:auto;background:linear-gradient(180deg,#1b1b1b,#141414);border-top:1px solid rgba(255,164,8,.5);border-radius:20px 20px 0 0;color:${C.t}"><div style="width:40px;height:5px;border-radius:4px;background:${C.line};margin:9px auto 2px"></div><div style="display:flex;align-items:center;gap:10px;padding:12px 17px;border-bottom:1px solid ${C.line};position:sticky;top:0;background:#191919"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><div><b style="font-size:16px">AI Trading Review</b><div style="font-size:11px;color:${C.t2}">разбор последних ${r.list.length} сделок</div></div><span style="margin-left:auto;cursor:pointer;color:${C.t2};font-size:28px;line-height:1" id="lbxRvX">×</span></div><div style="padding:6px 18px 30px">${secH}<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${C.t2};margin:16px 0 8px">Оценки за ${r.list.length} сделок</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">${scH}</div><div style="margin-top:16px;background:rgba(255,164,8,.10);border:1px solid rgba(255,164,8,.35);border-radius:12px;padding:13px;font-size:14px"><b style="color:${C.br}">Привычка №1 на следующие ${r.list.length}:</b> ${r.habit}.</div><div style="margin-top:16px;text-align:center"><div style="font-size:12px;color:${C.t2};margin-bottom:8px">Насколько полезен разбор?</div><div id="lbxStars" style="display:flex;justify-content:center;gap:7px;font-size:27px">${starsHtml}</div><div id="lbxStarMsg" style="font-size:11px;color:${C.pos};margin-top:7px;height:14px"></div></div><div style="margin-top:14px;font-size:12px;color:${C.t2};font-style:italic">AI может ошибаться. Разбор поведения и риск-профиля, не инвестиционный совет.</div></div></div>`;
+  o.innerHTML = `<div style="width:100%;max-height:92vh;overflow:auto;background:linear-gradient(180deg,#1b1b1b,#141414);border-top:1px solid rgba(255,164,8,.5);border-radius:20px 20px 0 0;color:${C.t}"><div style="width:40px;height:5px;border-radius:4px;background:${C.line};margin:9px auto 2px"></div><div style="display:flex;align-items:center;gap:10px;padding:12px 17px;border-bottom:1px solid ${C.line};position:sticky;top:0;background:#191919"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><div><b style="font-size:16px">AI Trading Review</b><div style="font-size:11px;color:${C.t2}">${t(`разбор последних ${r.list.length} сделок`, `review of your last ${r.list.length} trades`)}</div></div><span style="margin-left:auto;cursor:pointer;color:${C.t2};font-size:28px;line-height:1" id="lbxRvX">×</span></div><div style="padding:6px 18px 30px">${secH}<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${C.t2};margin:16px 0 8px">${t(`Оценки за ${r.list.length} сделок`, `Scores over ${r.list.length} trades`)}</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">${scH}</div><div style="margin-top:16px;background:rgba(255,164,8,.10);border:1px solid rgba(255,164,8,.35);border-radius:12px;padding:13px;font-size:14px"><b style="color:${C.br}">${t(`Привычка №1 на следующие ${r.list.length}:`, `Habit #1 for the next ${r.list.length}:`)}</b> ${r.habit}.</div><div style="margin-top:16px;text-align:center"><div style="font-size:12px;color:${C.t2};margin-bottom:8px">${t("Насколько полезен разбор?", "How helpful was this review?")}</div><div id="lbxStars" style="display:flex;justify-content:center;gap:7px;font-size:27px">${starsHtml}</div><div id="lbxStarMsg" style="font-size:11px;color:${C.pos};margin-top:7px;height:14px"></div></div><div style="margin-top:14px;font-size:12px;color:${C.t2};font-style:italic">${t("AI может ошибаться. Разбор поведения и риск-профиля, не инвестиционный совет.", "AI can make mistakes. A review of behaviour and risk profile, not investment advice.")}</div></div></div>`;
 
   document.body.appendChild(o);
   (o.querySelector("#lbxRvX") as HTMLElement).onclick = () => o.remove();
@@ -124,7 +125,7 @@ export function showReview(r: ReviewData): void {
   const paint = (k: number): void => stars.forEach((s, i) => (s.style.color = i <= k ? C.br : C.t2));
   stars.forEach((star, i) => {
     star.onmouseenter = () => paint(i);
-    star.onclick = () => { r.rating = i + 1; paint(i); starMsg.textContent = "Спасибо за оценку! 🙏"; };
+    star.onclick = () => { r.rating = i + 1; paint(i); starMsg.textContent = t("Спасибо за оценку! 🙏", "Thanks for rating! 🙏"); };
   });
   (o.querySelector("#lbxStars") as HTMLElement).onmouseleave = () => paint((r.rating || 0) - 1);
   if (r.rating) paint(r.rating - 1);
@@ -132,7 +133,7 @@ export function showReview(r: ReviewData): void {
 
 /** Update the "new trades" counter in the header and the badge on the pill. */
 export function updateCounter(n: number): void {
-  elCnt.textContent = `новых сделок: ${n}`;
+  elCnt.textContent = t(`новых сделок: ${n}`, `new trades: ${n}`);
   const pip = pill.querySelector("#lbxPip") as HTMLElement | null;
   if (pip) pip.textContent = String(n);
 }
@@ -149,7 +150,7 @@ function outsideClick(e: PointerEvent): void {
 export function mount(): void {
   box = document.createElement("div");
   box.style.cssText = `position:fixed;left:8px;right:8px;bottom:${NAV}px;z-index:2147483000;background:linear-gradient(180deg,#1b1b1b,#141414);border:1px solid rgba(255,164,8,.45);border-radius:18px;box-shadow:0 0 0 1px rgba(255,164,8,.18),0 18px 50px -14px rgba(0,0,0,.85);font-family:${C.font};color:${C.t};overflow:hidden`;
-  box.innerHTML = `<div style="display:flex;align-items:center;gap:9px;padding:12px 13px;border-bottom:1px solid ${C.line};background:linear-gradient(180deg,rgba(255,164,8,.10),transparent)"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;font-weight:800;color:#000;font-size:16px">⛨</div><div style="font-weight:700;font-size:15px;line-height:1.1">Trading Coach<div style="font-weight:500;font-size:11px;color:${C.t2}">live • демо-счёт</div></div><div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:${C.t2}"><span style="width:8px;height:8px;border-radius:50%;background:${C.pos};box-shadow:0 0 0 4px rgba(83,166,66,.15)"></span>слежу</div><button id="lbxMin" style="width:32px;height:32px;border:0;background:${C.rs};color:${C.t2};cursor:pointer;font-size:18px;border-radius:9px;margin-left:4px">–</button></div><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid ${C.line};color:${C.t2};font-size:12px"><span id="lbxCnt">новых сделок: ${S.newCount}</span><span style="display:flex;gap:8px;align-items:center"><button id="lbxPrev" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">‹</button><span id="lbxPos" style="min-width:46px;text-align:center;font-family:monospace">–</span><button id="lbxNext" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">›</button></span></div><div id="lbxCard" style="padding:15px 15px 17px;max-height:66vh;overflow:auto"></div>`;
+  box.innerHTML = `<div style="display:flex;align-items:center;gap:9px;padding:12px 13px;border-bottom:1px solid ${C.line};background:linear-gradient(180deg,rgba(255,164,8,.10),transparent)"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;font-weight:800;color:#000;font-size:16px">⛨</div><div style="font-weight:700;font-size:15px;line-height:1.1">Trading Coach<div style="font-weight:500;font-size:11px;color:${C.t2}">${t("live • демо-счёт", "live • demo account")}</div></div><div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:${C.t2}"><span style="width:8px;height:8px;border-radius:50%;background:${C.pos};box-shadow:0 0 0 4px rgba(83,166,66,.15)"></span>${t("слежу", "watching")}</div><button id="lbxMin" style="width:32px;height:32px;border:0;background:${C.rs};color:${C.t2};cursor:pointer;font-size:18px;border-radius:9px;margin-left:4px">–</button></div><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid ${C.line};color:${C.t2};font-size:12px"><span id="lbxCnt">${t(`новых сделок: ${S.newCount}`, `new trades: ${S.newCount}`)}</span><span style="display:flex;gap:8px;align-items:center"><button id="lbxPrev" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">‹</button><span id="lbxPos" style="min-width:46px;text-align:center;font-family:monospace">–</span><button id="lbxNext" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">›</button></span></div><div id="lbxCard" style="padding:15px 15px 17px;max-height:66vh;overflow:auto"></div>`;
   document.body.appendChild(box);
 
   pill = document.createElement("div");

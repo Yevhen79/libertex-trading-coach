@@ -18,6 +18,7 @@ import { S, readBalance } from "./state";
 import { buildComment } from "./comment";
 import { buildReview } from "./review";
 import { mount, unmount, render, toast, updateCounter } from "./ui";
+import { t } from "./i18n";
 import type { Trade, ClosedPositionsResponse, CoachWindow } from "./types";
 
 const w = window as unknown as CoachWindow;
@@ -45,15 +46,15 @@ mount();
 
 // 3a. Turn newly-closed trades into cards, fire a toast, refresh the view.
 function processTrades(list: Trade[]): void {
-  const fresh = list.filter((t) => !S.seen[t.ticket]).sort((a, b) => a.closeTime - b.closeTime);
+  const fresh = list.filter((tr) => !S.seen[tr.ticket]).sort((a, b) => a.closeTime - b.closeTime);
   if (!fresh.length) return;
 
-  fresh.forEach((t) => {
-    S.seen[t.ticket] = 1;
-    S.newTrades.push(t);
+  fresh.forEach((tr) => {
+    S.seen[tr.ticket] = 1;
+    S.newTrades.push(tr);
     S.newCount++;
     const all = S.baseAll.concat(S.newTrades);
-    const card = buildComment(t, all, S.newTrades);
+    const card = buildComment(tr, all, S.newTrades);
     // Every REVIEW_EVERY trades a full review is attached; otherwise a countdown.
     if (S.newCount % REVIEW_EVERY === 0) card.review = buildReview(S.newTrades.slice(-REVIEW_EVERY));
     else card.left = REVIEW_EVERY - (S.newCount % REVIEW_EVERY);
@@ -66,8 +67,8 @@ function processTrades(list: Trade[]): void {
 
   const last = fresh[fresh.length - 1], lp = pnl(last);
   toast(
-    (S.newCount % REVIEW_EVERY === 0 ? `🧠 Готов AI Trading Review ${REVIEW_EVERY} сделок! • ` : "") +
-      `Сделка ${sgn(lp)} — ${last.alias}`,
+    (S.newCount % REVIEW_EVERY === 0 ? t(`🧠 Готов AI Trading Review ${REVIEW_EVERY} сделок! • `, `🧠 AI Trading Review of ${REVIEW_EVERY} trades is ready! • `) : "") +
+      t(`Сделка ${sgn(lp)} — ${last.alias}`, `Trade ${sgn(lp)} — ${last.alias}`),
     lp >= 0 ? C.pos : C.neg,
   );
 }
@@ -81,10 +82,10 @@ function poll(): void {
       const list = (j && j.result && j.result.closed) || [];
       if (!S.init) {
         S.init = true;
-        list.forEach((t) => (S.seen[t.ticket] = 1));
+        list.forEach((tr) => (S.seen[tr.ticket] = 1));
         S.baseAll = list.slice();
-        S.medSum = median(list.map((t) => t.sumInv));
-        S.medDur = median(list.map((t) => (t.closeTime - t.startTime) / 60000));
+        S.medSum = median(list.map((tr) => tr.sumInv));
+        S.medDur = median(list.map((tr) => (tr.closeTime - tr.startTime) / 60000));
         render();
       } else {
         processTrades(list);
