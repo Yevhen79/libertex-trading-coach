@@ -43,9 +43,12 @@ export interface Copy {
   leverageBands: ReadonlyArray<(m: number, wp: string) => string>;
   /** Trade opened shortly after a loss closed. */
   revengeNote: string;
+  // ---- stop-loss status line (shown on EVERY card) --------------------
+  /** A stop-loss was set. */
+  stopSet: string;
   /** No stop-loss AND the trade lost. */
   noStopOnLoss: string;
-  /** No stop-loss (any outcome). */
+  /** No stop-loss (win / break-even). */
   noStop: string;
   /** One position was a large share of the deposit. */
   concentration(expoPct: string): string;

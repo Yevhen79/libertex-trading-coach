@@ -61,8 +61,16 @@ export function buildComment(trade: Trade, all: Trade[], list: Trade[]): TradeCa
 
   const patsArr = detect(trade, all, list).slice(0, MAX_PATTERNS);
 
+  // Stop-loss status — ALWAYS shown, on every card (green if set, orange if not).
+  const slSet = trade.stopLossPrice != null;
+  const slLine = slSet ? L.stopSet : p < 0 ? L.noStopOnLoss : L.noStop;
+  const slColour = slSet ? C.pos : C.br;
+
   // Assemble the body into readable blocks with dividers.
   const blocks: string[] = [`<div style="line-height:1.6">${head}${balS}</div>`];
+  blocks.push(
+    `<div style="margin-top:10px;font-size:13px;line-height:1.5;color:${slColour}">${slLine}</div>`,
+  );
   if (moveS)
     blocks.push(
       `<div style="margin-top:11px;padding-top:11px;border-top:1px solid ${C.line};line-height:1.55">${moveS.replace(/^\s+/, "")}</div>`,

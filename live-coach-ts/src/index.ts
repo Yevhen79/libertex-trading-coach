@@ -17,7 +17,7 @@ import { pnl, sgn, median, isWin, fk, postLossTrades } from "./format";
 import { S, readBalance } from "./state";
 import { buildComment } from "./comment";
 import { buildReview } from "./review";
-import { detectRevenge } from "./detect";
+import { detectRevenge, REVENGE_FRESH_MS } from "./detect";
 import type { RevengeSignal } from "./detect";
 import { mount, unmount, render, toast, updateCounter, revengeBanner } from "./ui";
 import { L } from "./i18n";
@@ -52,15 +52,15 @@ function processTrades(list: Trade[]): void {
   const fresh = list.filter((tr) => !S.seen[tr.ticket]).sort((a, b) => a.closeTime - b.closeTime);
   if (!fresh.length) return;
 
-  let revenge: RevengeSignal | null = null; // last matching signal in this batch
-  let revengeTrade: Trade | null = null;
-
   fresh.forEach((tr) => {
     S.seen[tr.ticket] = 1;
     const all = S.baseAll.concat(S.newTrades); // history BEFORE adding tr — for revenge look-back
+
     // Revenge check (post-facto): did this trade escalate risk right after a loss?
+    // Only warn if it JUST happened — never criticise old history (app open /
+    // re-inject): the trade must have closed within REVENGE_FRESH_MS of now.
     const sig = detectRevenge(tr, all);
-    if (sig) { revenge = sig; revengeTrade = tr; }
+    if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) showRevenge(sig, tr);
 
     S.newTrades.push(tr);
     S.newCount++;
@@ -83,8 +83,6 @@ function processTrades(list: Trade[]): void {
       L.tradeToast(sgn(lp), last.alias),
     lp >= 0 ? C.pos : C.neg,
   );
-
-  if (revenge && revengeTrade) showRevenge(revenge, revengeTrade);
 }
 
 /** Assemble and show the revenge-warning banner from a detected signal. */

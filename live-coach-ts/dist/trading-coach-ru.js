@@ -115,8 +115,9 @@
       (m, wp) => `экстремальное плечо <b>×${m}</b> — хватает <b>~${wp}%</b> против, чтобы стереть позицию.`
     ],
     revengeNote: "Открыта <b>вскоре после убытка</b> — по времени это отыгрыш.",
-    noStopOnLoss: "Без <b>стоп-лосса</b> — при таком плече убыток не был ничем ограничен.",
-    noStop: "Без <b>стоп-лосса</b> — риск в сделке не был ограничен заранее.",
+    stopSet: "Стоп-лосс <b>стоял</b> ✓ — риск был ограничен заранее.",
+    noStopOnLoss: "Стоп-лосс <b>не стоял</b> ✕ — при таком плече убыток не был ничем ограничен.",
+    noStop: "Стоп-лосс <b>не стоял</b> ✕ — риск в сделке не был ограничен заранее.",
     concentration: (expoPct) => `В одной позиции — <b>${expoPct}% депозита</b>. Концентрация капитала под риском.`,
     oversizeMargin: (marginK, medianK) => `Маржа крупнее обычного: ~$${marginK} против медианы ~$${medianK}.`,
     longHold: (min) => `Позиция удерживалась <b>${min} мин</b> — дольше обычного, убыток тянулся.`,
@@ -216,6 +217,7 @@
   var LONG_HOLD_FLOOR_MIN = 30;
   var STREAK_MIN = 3;
   var REVENGE_RECENT_MS = 5 * 6e4;
+  var REVENGE_FRESH_MS = 6e4;
   function detectRevenge(trade, all) {
     const prevLoss = all.filter((x) => x.ticket !== trade.ticket && pnl(x) < 0 && x.closeTime <= trade.startTime).sort((a, b) => a.closeTime - b.closeTime).pop();
     if (!prevLoss) return null;
@@ -236,8 +238,6 @@
     const wpS = wp >= 1 ? wp.toFixed(1) : wp.toFixed(2);
     const bandIdx = LEVERAGE_BAND_MAX.findIndex((max) => m <= max);
     out.push(L.leverageBands[bandIdx < 0 ? L.leverageBands.length - 1 : bandIdx](m, wpS));
-    if (trade.stopLossPrice == null && p < 0) out.push(L.noStopOnLoss);
-    else if (trade.stopLossPrice == null) out.push(L.noStop);
     const expo = bal ? trade.sumInv / bal * 100 : 0;
     if (expo >= CONCENTRATION_PCT) out.push(L.concentration(expo.toFixed(0)));
     if (S.medSum && trade.sumInv > S.medSum * OVERSIZE_FACTOR)
@@ -281,7 +281,13 @@
       fk(notion)
     ) : "";
     const patsArr = detect(trade, all, list).slice(0, MAX_PATTERNS);
+    const slSet = trade.stopLossPrice != null;
+    const slLine = slSet ? L.stopSet : p < 0 ? L.noStopOnLoss : L.noStop;
+    const slColour = slSet ? C.pos : C.br;
     const blocks = [`<div style="line-height:1.6">${head}${balS}</div>`];
+    blocks.push(
+      `<div style="margin-top:10px;font-size:13px;line-height:1.5;color:${slColour}">${slLine}</div>`
+    );
     if (moveS)
       blocks.push(
         `<div style="margin-top:11px;padding-top:11px;border-top:1px solid ${C.line};line-height:1.55">${moveS.replace(/^\s+/, "")}</div>`
@@ -675,16 +681,11 @@
   function processTrades(list) {
     const fresh = list.filter((tr) => !S.seen[tr.ticket]).sort((a, b) => a.closeTime - b.closeTime);
     if (!fresh.length) return;
-    let revenge = null;
-    let revengeTrade = null;
     fresh.forEach((tr) => {
       S.seen[tr.ticket] = 1;
       const all = S.baseAll.concat(S.newTrades);
       const sig = detectRevenge(tr, all);
-      if (sig) {
-        revenge = sig;
-        revengeTrade = tr;
-      }
+      if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) showRevenge(sig, tr);
       S.newTrades.push(tr);
       S.newCount++;
       const card = buildComment(tr, all.concat(tr), S.newTrades);
@@ -702,7 +703,6 @@
       (S.newCount % REVIEW_EVERY === 0 ? L.reviewReadyToastPrefix(REVIEW_EVERY) : "") + L.tradeToast(sgn(lp), last.alias),
       lp >= 0 ? C.pos : C.neg
     );
-    if (revenge && revengeTrade) showRevenge(revenge, revengeTrade);
   }
   function showRevenge(sig, trade) {
     const parts = [];

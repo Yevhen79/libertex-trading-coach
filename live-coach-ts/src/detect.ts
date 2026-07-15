@@ -40,6 +40,13 @@ export const STREAK_MIN = 3;
  */
 export const REVENGE_RECENT_MS = 5 * 60000; // 5 minutes
 
+/**
+ * RULE "revenge freshness": only ever pop the warning banner for a trade that
+ * closed within this long of *now*. Guarantees we never criticise old history
+ * (e.g. on app open / re-inject) — the banner is for what just happened.
+ */
+export const REVENGE_FRESH_MS = 60000; // 1 minute
+
 /** What a revenge warning is made of — the prior loss and how this trade escalated. */
 export interface RevengeSignal {
   prevLoss: Trade;
@@ -96,9 +103,9 @@ export function detect(trade: Trade, all: Trade[], list: Trade[]): string[] {
   const bandIdx = LEVERAGE_BAND_MAX.findIndex((max) => m <= max);
   out.push(L.leverageBands[bandIdx < 0 ? L.leverageBands.length - 1 : bandIdx](m, wpS));
 
-  // RULE — no stop-loss (harsher wording when it also lost).
-  if (trade.stopLossPrice == null && p < 0) out.push(L.noStopOnLoss);
-  else if (trade.stopLossPrice == null) out.push(L.noStop);
+  // NOTE — stop-loss status is NOT a pattern here: it's shown on every card as a
+  // dedicated always-present line (see comment.ts), so it can't be crowded out
+  // by the 2-pattern cap.
 
   // RULE — capital concentration: one position too big a share of the deposit.
   const expo = bal ? (trade.sumInv / bal) * 100 : 0;
