@@ -75,6 +75,27 @@ export function detectRevenge(trade: Trade, all: Trade[]): RevengeSignal | null 
 }
 
 /**
+ * PRE-TRADE revenge check: given the params of an order the user is about to
+ * open right now (`nowMs`), is there a loss that closed within the last 5 min
+ * that this order escalates on (higher leverage OR bigger margin)? This powers
+ * the ideal "warn before you open" path (DOM interception of the order form).
+ * Purely advisory — it never blocks the order.
+ */
+export function detectRevengePending(mult: number, margin: number, nowMs: number, all: Trade[]): RevengeSignal | null {
+  const prevLoss = all
+    .filter((x) => pnl(x) < 0 && x.closeTime <= nowMs)
+    .sort((a, b) => a.closeTime - b.closeTime)
+    .pop();
+  if (!prevLoss) return null;
+  const gap = nowMs - prevLoss.closeTime;
+  if (gap > REVENGE_RECENT_MS) return null;
+  const higherLev = mult > prevLoss.mult;
+  const biggerMargin = margin > prevLoss.sumInv;
+  if (!higherLev && !biggerMargin) return null;
+  return { prevLoss, minutesAfter: Math.max(0, Math.round(gap / 60000)), higherLev, biggerMargin };
+}
+
+/**
  * Leverage band boundaries (logic only — the wording lives in L.leverageBands).
  * `mult ≤ max` picks the band index; `wp` = adverse move (%) that wipes the
  * position (100 / mult). Bands escalate 1‑10 / 11‑50 / 51‑150 / 151‑500 / >500.

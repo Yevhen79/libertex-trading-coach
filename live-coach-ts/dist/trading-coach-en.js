@@ -228,6 +228,16 @@
     if (!higherLev && !biggerMargin) return null;
     return { prevLoss, minutesAfter: Math.max(0, Math.round(gap / 6e4)), higherLev, biggerMargin };
   }
+  function detectRevengePending(mult, margin, nowMs, all) {
+    const prevLoss = all.filter((x) => pnl(x) < 0 && x.closeTime <= nowMs).sort((a, b) => a.closeTime - b.closeTime).pop();
+    if (!prevLoss) return null;
+    const gap = nowMs - prevLoss.closeTime;
+    if (gap > REVENGE_RECENT_MS) return null;
+    const higherLev = mult > prevLoss.mult;
+    const biggerMargin = margin > prevLoss.sumInv;
+    if (!higherLev && !biggerMargin) return null;
+    return { prevLoss, minutesAfter: Math.max(0, Math.round(gap / 6e4)), higherLev, biggerMargin };
+  }
   var LEVERAGE_BAND_MAX = [10, 50, 150, 500, Infinity];
   function detect(trade, all, list) {
     const out = [];
@@ -431,6 +441,55 @@
     ];
     const habit = slp < 50 ? L.habitStop : mAvg >= 100 ? L.habitLeverage : rr > 3 ? L.habitCutLosses : L.habitSize;
     return { list, sections, metrics, habit };
+  }
+
+  // src/orderform.ts
+  var OPEN_LABEL = /^(buy|sell|купить|продать)\b/i;
+  var AMOUNT_LABEL = /amount|сумма/i;
+  var MULT_LABEL = /multiplier|множител/i;
+  function num(s) {
+    return parseFloat((s || "").replace(/[^\d.]/g, "")) || 0;
+  }
+  function findOpenButton(start) {
+    let n = start;
+    for (let up = 0; up < 4 && n; up++) {
+      const t = (n.textContent || "").trim();
+      if (t.length < 40 && OPEN_LABEL.test(t)) return n;
+      n = n.parentElement;
+    }
+    return null;
+  }
+  function readOrderForm(btn) {
+    let scope = btn;
+    for (let up = 0; up < 9 && scope; up++) {
+      const txt2 = scope.textContent || "";
+      if (AMOUNT_LABEL.test(txt2) && MULT_LABEL.test(txt2)) break;
+      scope = scope.parentElement;
+    }
+    if (!scope) return null;
+    const txt = scope.textContent || "";
+    const multM = txt.match(/(?:×|multiplier|множител[а-я]*)\D{0,8}(\d[\d\s.,]*)/i);
+    const amtM = txt.match(/(?:amount|сумма)\D{0,10}(\d[\d\s.,]*)/i);
+    const mult = multM ? num(multM[1]) : 0;
+    const margin = amtM ? num(amtM[1]) : 0;
+    if (mult <= 0 || margin <= 0) return null;
+    return { mult, margin };
+  }
+  function installOrderWatch(onOpen) {
+    const handler = (e) => {
+      try {
+        const target = e.target;
+        if (!(target instanceof Element)) return;
+        if (target.closest("[id^=lbx]")) return;
+        const btn = findOpenButton(target);
+        if (!btn) return;
+        const form = readOrderForm(btn);
+        if (form) onOpen(form.mult, form.margin);
+      } catch {
+      }
+    };
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
   }
 
   // src/ui.ts
@@ -685,7 +744,7 @@
       S.seen[tr.ticket] = 1;
       const all = S.baseAll.concat(S.newTrades);
       const sig = detectRevenge(tr, all);
-      if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) showRevenge(sig, tr);
+      if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) warnRevenge(sig, tr.mult, tr.sumInv);
       S.newTrades.push(tr);
       S.newCount++;
       const card = buildComment(tr, all.concat(tr), S.newTrades);
@@ -704,10 +763,14 @@
       lp >= 0 ? C.pos : C.neg
     );
   }
-  function showRevenge(sig, trade) {
+  var lastRevengeAt = 0;
+  function warnRevenge(sig, curMult, curMargin) {
+    const now = Date.now();
+    if (now - lastRevengeAt < 9e4) return;
+    lastRevengeAt = now;
     const parts = [];
-    if (sig.higherLev) parts.push(L.revengeLev(trade.mult, sig.prevLoss.mult));
-    if (sig.biggerMargin) parts.push(L.revengeMargin(fk(trade.sumInv), fk(sig.prevLoss.sumInv)));
+    if (sig.higherLev) parts.push(L.revengeLev(curMult, sig.prevLoss.mult));
+    if (sig.biggerMargin) parts.push(L.revengeMargin(fk(curMargin), fk(sig.prevLoss.sumInv)));
     let body = L.revengeBody(sig.minutesAfter, parts.join(L.revengeAnd));
     const hist = S.baseAll.concat(S.newTrades);
     const pl = postLossTrades(hist, hist);
@@ -737,8 +800,13 @@
   render();
   poll();
   var iv = setInterval(poll, POLL_MS);
+  var stopWatch = installOrderWatch((mult, margin) => {
+    const sig = detectRevengePending(mult, margin, Date.now(), S.baseAll.concat(S.newTrades));
+    if (sig) warnRevenge(sig, mult, margin);
+  });
   w.__lbxCoachStop = () => {
     clearInterval(iv);
+    stopWatch();
     unmount();
   };
   console.info(`[Trading Coach] v2.2 injected; carried ${S.newCount} trades`);

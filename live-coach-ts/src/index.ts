@@ -17,8 +17,9 @@ import { pnl, sgn, median, isWin, fk, postLossTrades } from "./format";
 import { S, readBalance } from "./state";
 import { buildComment } from "./comment";
 import { buildReview } from "./review";
-import { detectRevenge, REVENGE_FRESH_MS } from "./detect";
+import { detectRevenge, detectRevengePending, REVENGE_FRESH_MS } from "./detect";
 import type { RevengeSignal } from "./detect";
+import { installOrderWatch } from "./orderform";
 import { mount, unmount, render, toast, updateCounter, revengeBanner } from "./ui";
 import { L } from "./i18n";
 import type { Trade, ClosedPositionsResponse, CoachWindow } from "./types";
@@ -56,11 +57,11 @@ function processTrades(list: Trade[]): void {
     S.seen[tr.ticket] = 1;
     const all = S.baseAll.concat(S.newTrades); // history BEFORE adding tr — for revenge look-back
 
-    // Revenge check (post-facto): did this trade escalate risk right after a loss?
-    // Only warn if it JUST happened — never criticise old history (app open /
-    // re-inject): the trade must have closed within REVENGE_FRESH_MS of now.
+    // Revenge check (post-facto fallback): did this trade escalate risk right
+    // after a loss? Only warn if it JUST happened — never criticise old history
+    // (app open / re-inject): the trade must have closed within REVENGE_FRESH_MS.
     const sig = detectRevenge(tr, all);
-    if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) showRevenge(sig, tr);
+    if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) warnRevenge(sig, tr.mult, tr.sumInv);
 
     S.newTrades.push(tr);
     S.newCount++;
@@ -85,11 +86,23 @@ function processTrades(list: Trade[]): void {
   );
 }
 
-/** Assemble and show the revenge-warning banner from a detected signal. */
-function showRevenge(sig: RevengeSignal, trade: Trade): void {
+// De-dup so the pre-trade (order-form) and post-facto (poll) paths can't both
+// pop a banner for the same escalation within a short window.
+let lastRevengeAt = 0;
+
+/**
+ * Show the revenge banner for an escalation of leverage/margin `cur*` over the
+ * prior loss in `sig`. Called by BOTH paths: pre-trade (order-form intercept)
+ * and post-facto (poll). Never blocks — advisory only.
+ */
+function warnRevenge(sig: RevengeSignal, curMult: number, curMargin: number): void {
+  const now = Date.now();
+  if (now - lastRevengeAt < 90000) return; // one warning per ~90s
+  lastRevengeAt = now;
+
   const parts: string[] = [];
-  if (sig.higherLev) parts.push(L.revengeLev(trade.mult, sig.prevLoss.mult));
-  if (sig.biggerMargin) parts.push(L.revengeMargin(fk(trade.sumInv), fk(sig.prevLoss.sumInv)));
+  if (sig.higherLev) parts.push(L.revengeLev(curMult, sig.prevLoss.mult));
+  if (sig.biggerMargin) parts.push(L.revengeMargin(fk(curMargin), fk(sig.prevLoss.sumInv)));
   let body = L.revengeBody(sig.minutesAfter, parts.join(L.revengeAnd));
 
   // Add the historic post-loss win-rate line only with enough of a sample (≥5).
@@ -127,8 +140,17 @@ function poll(): void {
 render();
 poll();
 const iv = setInterval(poll, POLL_MS);
+
+// Pre-trade path (ideal): warn the instant Buy/Sell is pressed, from the live
+// order form — before/at the moment the trade opens. Falls back to the poll.
+const stopWatch = installOrderWatch((mult, margin) => {
+  const sig = detectRevengePending(mult, margin, Date.now(), S.baseAll.concat(S.newTrades));
+  if (sig) warnRevenge(sig, mult, margin);
+});
+
 w.__lbxCoachStop = () => {
   clearInterval(iv);
+  stopWatch();
   unmount();
 };
 
