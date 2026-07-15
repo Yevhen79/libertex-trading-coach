@@ -1,0 +1,145 @@
+/*
+ * LOCALE CONTRACT — the single source of truth for every user-facing string.
+ * =========================================================================
+ * `Copy` is the typed shape both language packs must implement. Because
+ * `ru.ts` and `en.ts` are typed as `Copy`, the TypeScript compiler fails the
+ * build if either pack is missing a key or has the wrong signature — so the
+ * two languages can never drift out of parity.
+ *
+ * At build time esbuild bakes `LOCALE` and `i18n.ts` selects one pack, so the
+ * unused language is tree-shaken away and each output bundle is single-language.
+ *
+ * VOICE (see messages): cold, factual, peer-to-peer. State the math and the
+ * pattern; no consolation, no praise, no magnitude adjectives, no pep emoji.
+ */
+
+export interface Copy {
+  // ---- per-trade openers (messages) -----------------------------------
+  /** Openers rotated after a losing trade. Placeholders {a}=alias, {v}=signed money. */
+  lossOpeners: string[];
+  /** Openers rotated after a winning trade. */
+  winOpeners: string[];
+
+  // ---- per-trade card (comment) ---------------------------------------
+  /** Card title for a losing trade. */
+  cardTitleLoss: string;
+  /** Card title for a winning trade. */
+  cardTitleWin: string;
+  /** Card title for a break-even trade. */
+  cardTitleFlat: string;
+  /** Opener for a break-even trade. */
+  breakEvenHead(alias: string): string;
+  /** Deposit-impact line after a loss. `neg` = colour, `pctS` = "1.23", `balK` = "20k". */
+  lossDeposit(neg: string, pctS: string, balK: string): string;
+  /** Deposit-impact line after a gain. */
+  gainDeposit(pos: string, pctS: string, balK: string): string;
+  /** Leverage-amplification line: a small price move became a big % of margin. */
+  leverageAmp(moveS: string, mult: number, colour: string, pinS: string, notionK: string): string;
+  /** Locale tag for time formatting, e.g. "ru-RU" / "en-US". */
+  timeLocale: string;
+
+  // ---- per-trade patterns (detect) ------------------------------------
+  /** Leverage bands 0..4 (low→extreme); each renders the multiplier + wipe %. */
+  leverageBands: ReadonlyArray<(m: number, wp: string) => string>;
+  /** Trade opened shortly after a loss closed. */
+  revengeNote: string;
+  /** No stop-loss AND the trade lost. */
+  noStopOnLoss: string;
+  /** No stop-loss (any outcome). */
+  noStop: string;
+  /** One position was a large share of the deposit. */
+  concentration(expoPct: string): string;
+  /** Margin larger than the trader's own median. */
+  oversizeMargin(marginK: string, medianK: string): string;
+  /** Position held unusually long into a loss. */
+  longHold(minutes: number): string;
+  /** N wins in a row. */
+  winStreak(streak: number): string;
+  /** N losses in a row. */
+  lossStreak(streak: number): string;
+  /** Same instrument as the previous trade. */
+  sameInstrument(alias: string): string;
+
+  // ---- N-trade review (review) ----------------------------------------
+  styleScalper: string;
+  styleIntraday: string;
+  styleDaySwing: string;
+  styleSwing: string;
+  /** Average-leverage descriptor (5 buckets by mAvg). */
+  levDesc(mAvg: number): string;
+  /** Concentrated in one instrument. */
+  concConcentrated(alias: string, pct: number): string;
+  /** Spread across N instruments. */
+  concSpread(nAssets: number): string;
+  trendImprove: string;
+  trendDecline: string;
+  trendMixed: string;
+  /** Greed/fear flag: reward:risk skew. */
+  gfSkew(ratio: number): string;
+  /** Greed/fear flag: revenge trades in the window. */
+  gfRevenge(count: number): string;
+  /** Greed/fear flag: losing streak length. */
+  gfLossStreak(len: number): string;
+  /** Greed/fear flag: oversized-margin trades. */
+  gfOversize(count: number): string;
+
+  sec1Head: string;
+  sec1Body(styleName: string, medMin: number, levDesc: string, concDesc: string): string;
+  sec2Head(n: number): string;
+  sec2Total(n: number): string;
+  sec2Winners(wins: number, n: number, wr: number): string;
+  sec2Best(alias: string, pos: string, signed: string): string;
+  sec2Worst(alias: string, neg: string, signed: string): string;
+  sec2AvgWL(avgWin: string, avgLoss: string): string;
+  sec2Size(marginF: string, mAvg: number, notionK: string): string;
+  sec2Stops(slPct: number): string;
+  sec2Leverage(mAvg: number, mMax: number): string;
+  sec2Duration(med: number, min: number, max: number): string;
+  sec3Head: string;
+  sec3Body(netColour: string, netSigned: string, pctNet: string, wr: number, hist: number, bestA: string, bestSigned: string, worstA: string, worstSigned: string, trend: string): string;
+  sec4Head: string;
+  sec4Body(mAvg: number, mcDist: string, expoMax: number, notionMaxK: string, slPct: number, noSLTail: string): string;
+  /** Tail appended to sec4 when some trades had no stop; empty otherwise. */
+  sec4NoSLTail(noSL: number): string;
+  sec5Head: string;
+  sec5WithFlags(flagsJoined: string): string;
+  sec5Clean: string;
+  sec6Head: string;
+  sec6StopLow: string;
+  sec6StopOk: string;
+  sec6LevHigh: string;
+  sec6LevOk: string;
+
+  scoreConsistencyLabel: string;
+  scoreConsistencyNote(wr: number, lossStreak: number): string;
+  scoreDisciplineLabel: string;
+  scoreDisciplineNote(slPct: number, mAvg: number, expoMax: number): string;
+  scoreRationalLabel: string;
+  scoreRationalNote(rr: string, revenge: number): string;
+
+  habitStop: string;
+  habitLeverage: string;
+  habitCutLosses: string;
+  habitSize: string;
+
+  // ---- UI chrome (ui) -------------------------------------------------
+  greeting(reviewEvery: number, tColour: string, balK: string): string;
+  openReviewBtn(reviewEvery: number): string;
+  reviewCountdown(left: number, tColour: string, rsColour: string): string;
+  helpful: string;
+  thanksUp: string;
+  thanksDown: string;
+  reviewSubtitle(n: number): string;
+  scoresHeading(n: number): string;
+  habitHeading(n: number): string;
+  reviewHelpfulQ: string;
+  reviewDisclaimer: string;
+  thanksRating: string;
+  headerStatus: string;
+  headerWatching: string;
+  newTrades(n: number): string;
+
+  // ---- entry-point toasts (index) -------------------------------------
+  reviewReadyToastPrefix(reviewEvery: number): string;
+  tradeToast(signed: string, alias: string): string;
+}

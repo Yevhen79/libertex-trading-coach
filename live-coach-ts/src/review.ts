@@ -13,7 +13,7 @@ import type { Trade, ReviewData, ReviewSection, ReviewScore } from "./types";
 import { C } from "./config";
 import { pnl, isWin, isLoss, sum, fmt, sgn, fk, median } from "./format";
 import { S, readBalance } from "./state";
-import { t } from "./i18n";
+import { L } from "./i18n";
 
 /** RULE: same 20-min window as detect.ts, used to count revenge trades in the window. */
 export const REVENGE_WINDOW_MS = 20 * 60000;
@@ -103,94 +103,75 @@ export function buildReview(list: Trade[]): ReviewData {
   const rat = Math.max(1, Math.min(10, Math.round(10 - Math.min(6, rr) - (revenge > 2 ? 2 : revenge > 0 ? 1 : 0) - (mAvg >= 200 ? 1 : 0))));
 
   // ---- verbal buckets ---------------------------------------------------
-  const styleName = dMed < 3
-    ? t("скальпер", "scalper")
-    : dMed < 60
-      ? t("внутридневной трейдер", "intraday trader")
-      : dMed < 1440
-        ? t("дей/свинг-трейдер", "day/swing trader")
-        : t("свинг-трейдер", "swing trader");
-  const levDesc =
-    mAvg > 500 ? t(`с экстремальным плечом (в среднем ×${mAvg})`, `with extreme leverage (avg ×${mAvg})`)
-    : mAvg > 150 ? t(`с очень высоким плечом (в среднем ×${mAvg})`, `with very high leverage (avg ×${mAvg})`)
-    : mAvg > 50 ? t(`с высоким плечом (в среднем ×${mAvg})`, `with high leverage (avg ×${mAvg})`)
-    : mAvg > 10 ? t(`с умеренным плечом (в среднем ×${mAvg})`, `with moderate leverage (avg ×${mAvg})`)
-    : t(`с невысоким плечом (в среднем ×${mAvg})`, `with modest leverage (avg ×${mAvg})`);
-  const concDesc = conc > 60
-    ? t(`сильно сконцентрирован на <b>${topA}</b> (${conc}% сделок)`, `heavily concentrated in <b>${topA}</b> (${conc}% of trades)`)
-    : t(`распределяешь сделки по ${nAss} инструментам`, `spread across ${nAss} instruments`);
-  const trend = wr >= lwr && net >= 0
-    ? t("в целом улучшение", "an overall improvement")
-    : net < 0
-      ? t("скорее ухудшение", "more of a decline")
-      : t("смешанная динамика", "mixed dynamics");
+  const styleName = dMed < 3 ? L.styleScalper
+    : dMed < 60 ? L.styleIntraday
+    : dMed < 1440 ? L.styleDaySwing
+    : L.styleSwing;
+  const levDesc = L.levDesc(mAvg);
+  const concDesc = conc > 60 ? L.concConcentrated(topA, conc) : L.concSpread(nAss);
+  const trend = wr >= lwr && net >= 0 ? L.trendImprove : net < 0 ? L.trendDecline : L.trendMixed;
 
   // "Greed & fear" flags — only surfaced when the condition is met.
   const gf: string[] = [];
-  if (rr > 3) gf.push(t(`прибыль фиксируется рано, а убыткам даёшь течь — средний убыток в <b>${Math.round(rr)}×</b> больше среднего профита (классический перекос)`, `profits are booked early but losses run — the average loss is <b>${Math.round(rr)}×</b> the average win (a classic skew)`));
-  if (revenge > 0) gf.push(t(`<b>${revenge}</b> сделок открыты вскоре после убытка — возможные эмоциональные отыгрыши`, `<b>${revenge}</b> trades opened soon after a loss — possible emotional revenge trades`));
-  if (mls >= 3) gf.push(t(`была серия из <b>${mls}</b> убытков подряд — момент, где важно не повышать ставки`, `there was a streak of <b>${mls}</b> losses in a row — a moment where it matters not to raise stakes`));
-  if (over > 0) gf.push(t(`<b>${over}</b> сделок с маржой заметно крупнее обычного`, `<b>${over}</b> trades with margin notably larger than usual`));
+  if (rr > 3) gf.push(L.gfSkew(Math.round(rr)));
+  if (revenge > 0) gf.push(L.gfRevenge(revenge));
+  if (mls >= 3) gf.push(L.gfLossStreak(mls));
+  if (over > 0) gf.push(L.gfOversize(over));
+
+  const netColour = net >= 0 ? C.pos : C.neg;
+  const pctNetS = `${pctNet >= 0 ? "+" : ""}${pctNet.toFixed(1)}`;
 
   const sections: ReviewSection[] = [
     {
-      h: t("1. Профиль стиля", "1. Style profile"),
-      html: t(`Ты преимущественно <b>${styleName}</b> — медиана удержания ${dMed} мин. Торгуешь ${levDesc}, ${concDesc}.`, `You're mostly a <b>${styleName}</b> — median hold ${dMed} min. You trade ${levDesc}, ${concDesc}.`),
+      h: L.sec1Head,
+      html: L.sec1Body(styleName, dMed, levDesc, concDesc),
     },
     {
-      h: t(`2. Параметры за ${n} сделок`, `2. Parameters over ${n} trades`),
+      h: L.sec2Head(n),
       list: [
-        t(`Всего сделок: <b>${n}</b>`, `Total trades: <b>${n}</b>`),
-        t(`Прибыльных: <b>${wins.length} из ${n}</b> (${wr}%)`, `Winners: <b>${wins.length} of ${n}</b> (${wr}%)`),
-        t(`Крупнейший профит: ${bestTrade.alias} (<b style="color:${C.pos}">${sgn(pnl(bestTrade))}</b>)`, `Largest profit: ${bestTrade.alias} (<b style="color:${C.pos}">${sgn(pnl(bestTrade))}</b>)`),
-        t(`Крупнейший убыток: ${worstTrade.alias} (<b style="color:${C.neg}">${sgn(pnl(worstTrade))}</b>)`, `Largest loss: ${worstTrade.alias} (<b style="color:${C.neg}">${sgn(pnl(worstTrade))}</b>)`),
-        t(`Средний профит / убыток: <b>${sgn(avgW)}</b> / <b>${sgn(avgL)}</b>`, `Average profit / loss: <b>${sgn(avgW)}</b> / <b>${sgn(avgL)}</b>`),
-        t(`Средняя маржа × плечо: $${fmt(avgSum)} × ×${mAvg} ≈ объём <b>$${fk(avgNot)}</b>`, `Average margin × leverage: $${fmt(avgSum)} × ×${mAvg} ≈ volume <b>$${fk(avgNot)}</b>`),
-        t(`Сделок со стоп-лоссом: <b>${slp}%</b>`, `Trades with a stop-loss: <b>${slp}%</b>`),
-        t(`Плечо: среднее ×${mAvg}, макс ×${mMax}`, `Leverage: avg ×${mAvg}, max ×${mMax}`),
-        t(`Длительность: медиана ${dMed} мин (${dMin}–${dMax})`, `Duration: median ${dMed} min (${dMin}–${dMax})`),
+        L.sec2Total(n),
+        L.sec2Winners(wins.length, n, wr),
+        L.sec2Best(bestTrade.alias, C.pos, sgn(pnl(bestTrade))),
+        L.sec2Worst(worstTrade.alias, C.neg, sgn(pnl(worstTrade))),
+        L.sec2AvgWL(sgn(avgW), sgn(avgL)),
+        L.sec2Size(fmt(avgSum), mAvg, fk(avgNot)),
+        L.sec2Stops(slp),
+        L.sec2Leverage(mAvg, mMax),
+        L.sec2Duration(dMed, dMin, dMax),
       ],
     },
     {
-      h: t("3. Динамика", "3. Dynamics"),
-      html: t(`Чистый результат — <b style="color:${net >= 0 ? C.pos : C.neg}">${sgn(net)}</b> (${pctNet >= 0 ? "+" : ""}${pctNet.toFixed(1)}% депозита). Win rate ${wr}% против ${lwr}% за всю историю. Лучший актив — <b>${bestA}</b> (${sgn(by[bestA])}), слабее всего — <b>${worstA}</b> (${sgn(by[worstA])}). Это ${trend}.`, `Net result — <b style="color:${net >= 0 ? C.pos : C.neg}">${sgn(net)}</b> (${pctNet >= 0 ? "+" : ""}${pctNet.toFixed(1)}% of deposit). Win rate ${wr}% vs ${lwr}% over your whole history. Best asset — <b>${bestA}</b> (${sgn(by[bestA])}), weakest — <b>${worstA}</b> (${sgn(by[worstA])}). This is ${trend}.`),
+      h: L.sec3Head,
+      html: L.sec3Body(netColour, sgn(net), pctNetS, wr, lwr, bestA, sgn(by[bestA]), worstA, sgn(by[worstA]), trend),
     },
     {
-      h: t("4. Риск-паттерны", "4. Risk patterns"),
-      html: t(`Главный усилитель риска — плечо: при среднем ×${mAvg} margin call наступает при движении всего ~<b>${mcDist.toFixed(1)}%</b> против тебя. Максимальная позиция занимала <b>${expoMax}% депозита</b> (ноционал до $${fk(notMax)}). Стоп-лосс стоял в <b>${slp}%</b> сделок${noSL > 0 ? ` — ${noSL} без защиты.` : "."}`, `The main risk amplifier is leverage: at an average of ×${mAvg} a margin call hits after just ~<b>${mcDist.toFixed(1)}%</b> against you. The largest position took <b>${expoMax}% of the deposit</b> (notional up to $${fk(notMax)}). A stop-loss was set on <b>${slp}%</b> of trades${noSL > 0 ? ` — ${noSL} unprotected.` : "."}`),
+      h: L.sec4Head,
+      html: L.sec4Body(mAvg, mcDist.toFixed(1), expoMax, fk(notMax), slp, L.sec4NoSLTail(noSL)),
     },
     {
-      h: t("5. Жадность и страх", "5. Greed & fear"),
-      html: gf.length
-        ? t(`Пара вещей, которые мягко подмечу: ${gf.join("; ")}. Ничего страшного — просто чтобы ты это видел.`, `A couple of things worth noting: ${gf.join("; ")}. Nothing dramatic — just so you see it.`)
-        : t("Явных эмоциональных всплесков не вижу — ни отыгрышей, ни резких раздуваний объёма. Ты держишь холодную голову 🕊 красиво.", "No obvious emotional spikes — no revenge trades, no sudden size inflation. You're keeping a cool head 🕊 nice."),
+      h: L.sec5Head,
+      html: gf.length ? L.sec5WithFlags(gf.join("; ")) : L.sec5Clean,
     },
     {
-      h: t("6. Прогресс и вывод", "6. Progress & takeaway"),
+      h: L.sec6Head,
       html:
-        (slp < 50
-          ? t("Если и есть что подтянуть — это <b>дисциплина по стопам</b>, и, честно, одно это изменило бы многое. ", "If there's one thing to work on, it's <b>stop-loss discipline</b> — and honestly, that alone would change a lot. ")
-          : t("Дисциплина по стопам у тебя на уровне — так держать. ", "Your stop-loss discipline is at a good level — keep it up. ")) +
-        (mAvg >= 100
-          ? t("А если чуть снизить плечо, у маржи будет больше воздуха на обычных колебаниях.", "And easing off the leverage a little would give your margin more room on ordinary swings.")
-          : t("Плечо в разумных пределах — это бережёт твой счёт.", "Your leverage is within reason — that protects your account.")),
+        (slp < 50 ? L.sec6StopLow : L.sec6StopOk) +
+        (mAvg >= 100 ? L.sec6LevHigh : L.sec6LevOk),
     },
   ];
 
+  const rrS = rr > 50 ? "∞" : rr.toFixed(1);
   const scores: ReviewScore[] = [
-    [t("Консистентность", "Consistency"), cons, t(`win rate ${wr}%, серия убытков ${mls}`, `win rate ${wr}%, loss streak ${mls}`)],
-    [t("Дисциплина", "Discipline"), disc, t(`стопы ${slp}%, плечо ×${mAvg}, маржа ${expoMax}%`, `stops ${slp}%, leverage ×${mAvg}, margin ${expoMax}%`)],
-    [t("Рациональность", "Rational"), rat, t(`R:R 1:${rr > 50 ? "∞" : rr.toFixed(1)}, отыгрышей ${revenge}`, `R:R 1:${rr > 50 ? "∞" : rr.toFixed(1)}, revenge ${revenge}`)],
+    [L.scoreConsistencyLabel, cons, L.scoreConsistencyNote(wr, mls)],
+    [L.scoreDisciplineLabel, disc, L.scoreDisciplineNote(slp, mAvg, expoMax)],
+    [L.scoreRationalLabel, rat, L.scoreRationalNote(rrS, revenge)],
   ];
 
   // "Habit #1" — the single most useful thing to fix next, chosen by priority.
-  const habit = slp < 50
-    ? t("ставить стоп-лосс на каждую сделку (при высоком плече — обязательно)", "set a stop-loss on every trade (mandatory at high leverage)")
-    : mAvg >= 100
-      ? t("снизить плечо — оно кратно усиливает риск слить маржу", "lower your leverage — it multiplies the risk of losing your margin")
-      : rr > 3
-        ? t("резать убытки быстрее и давать прибыли расти", "cut losses faster and let profits run")
-        : t("держать размер и плечо в разумных пределах", "keep size and leverage within reason");
+  const habit = slp < 50 ? L.habitStop
+    : mAvg >= 100 ? L.habitLeverage
+    : rr > 3 ? L.habitCutLosses
+    : L.habitSize;
 
   return { list, sections, scores, habit };
 }

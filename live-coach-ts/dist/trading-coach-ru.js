@@ -19,9 +19,9 @@
   };
 
   // src/format.ts
-  var pnl = (t2) => Math.round((t2.equityInv - t2.sumInv) * 100) / 100;
-  var isWin = (t2) => pnl(t2) > 0;
-  var isLoss = (t2) => pnl(t2) < 0;
+  var pnl = (t) => Math.round((t.equityInv - t.sumInv) * 100) / 100;
+  var isWin = (t) => pnl(t) > 0;
+  var isLoss = (t) => pnl(t) < 0;
   var sum = (a) => a.reduce((s, v) => s + v, 0);
   var fmt = (n) => (Math.round(Math.abs(n) * 100) / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
   var sgn = (n) => (n >= 0 ? "+" : "−") + "$" + fmt(n);
@@ -31,9 +31,8 @@
     const b = a.slice().sort((x, y) => x - y);
     return b[Math.floor(b.length / 2)];
   };
-  var moveOf = (t2) => t2.direction === "growth" ? (t2.closeRate - t2.startRate) / t2.startRate * 100 : (t2.startRate - t2.closeRate) / t2.startRate * 100;
+  var moveOf = (t) => t.direction === "growth" ? (t.closeRate - t.startRate) / t.startRate * 100 : (t.startRate - t.closeRate) / t.startRate * 100;
   var wipe = (m) => m ? 100 / m : 100;
-  var capitalize = (s) => s.replace(/^./, (c) => c.toUpperCase());
   var plural = (n) => {
     const a = n % 100, b = n % 10;
     return a > 10 && a < 20 ? "сделок" : b === 1 ? "сделка" : b >= 2 && b <= 4 ? "сделки" : "сделок";
@@ -70,44 +69,120 @@
     return pool[i];
   }
 
-  // src/i18n.ts
-  var t = (ru, en) => true ? ru : en;
+  // src/locales/ru.ts
+  var ru = {
+    // ---- per-trade openers ----------------------------------------------
+    lossOpeners: [
+      "<b>{a}</b> закрыта в минус: <b>{v}</b>.",
+      "Минус по <b>{a}</b>: <b>{v}</b>.",
+      "<b>{a}</b> — убыток <b>{v}</b>.",
+      "Позиция <b>{a}</b> закрыта в <b>{v}</b>."
+    ],
+    winOpeners: [
+      "<b>{a}</b> закрыта в плюс: <b>{v}</b>.",
+      "Плюс по <b>{a}</b>: <b>{v}</b>.",
+      "<b>{a}</b> — прибыль <b>{v}</b>.",
+      "Позиция <b>{a}</b> закрыта в <b>{v}</b>."
+    ],
+    // ---- per-trade card -------------------------------------------------
+    cardTitleLoss: "Разбор сделки: минус",
+    cardTitleWin: "Разбор сделки: плюс",
+    cardTitleFlat: "Сделка в ноль",
+    breakEvenHead: (a) => `Сделка по <b>${a}</b> закрылась в ноль.`,
+    lossDeposit: (neg, pctS, balK) => ` Убыток — <b style="color:${neg}">−${pctS}%</b> депозита ($${balK}).`,
+    gainDeposit: (pos, pctS, balK) => ` Прибыль — <b style="color:${pos}">${pctS}%</b> депозита ($${balK}).`,
+    leverageAmp: (moveS, mult, colour, pinS, notionK) => ` ⚙️ Цена прошла <b>${moveS}%</b>, плечо <b>×${mult}</b> превратило это в <b style="color:${colour}">${pinS}%</b> от вложенного (объём ~$${notionK}).`,
+    timeLocale: "ru-RU",
+    // ---- per-trade patterns ---------------------------------------------
+    leverageBands: [
+      (m, wp) => `низкое плечо <b>×${m}</b> — до margin call ~${wp}% против позиции.`,
+      (m, wp) => `умеренное плечо <b>×${m}</b> — до margin call ~${wp}% движения против.`,
+      (m, wp) => `высокое плечо <b>×${m}</b> — ~${wp}% против позиции уже её обнуляет.`,
+      (m, wp) => `очень высокое плечо <b>×${m}</b> — ~${wp}% против почти обнуляет вложенное.`,
+      (m, wp) => `экстремальное плечо <b>×${m}</b> — хватает <b>~${wp}%</b> против, чтобы стереть позицию.`
+    ],
+    revengeNote: "Открыта <b>вскоре после убытка</b> — по времени это отыгрыш.",
+    noStopOnLoss: "Без <b>стоп-лосса</b> — при таком плече убыток не был ничем ограничен.",
+    noStop: "Без <b>стоп-лосса</b> — риск в сделке не был ограничен заранее.",
+    concentration: (expoPct) => `В одной позиции — <b>${expoPct}% депозита</b>. Концентрация капитала под риском.`,
+    oversizeMargin: (marginK, medianK) => `Маржа крупнее обычного: ~$${marginK} против медианы ~$${medianK}.`,
+    longHold: (min) => `Позиция удерживалась <b>${min} мин</b> — дольше обычного, убыток тянулся.`,
+    winStreak: (s) => `<b>${s} прибыльных подряд</b>. На серии растёт соблазн поднять плечо — это меняет риск.`,
+    lossStreak: (s) => `<b>${s} убытков подряд</b>.`,
+    sameInstrument: (a) => `Снова <b>${a}</b> — концентрация на одном инструменте.`,
+    // ---- N-trade review -------------------------------------------------
+    styleScalper: "скальпер",
+    styleIntraday: "внутридневной трейдер",
+    styleDaySwing: "дей/свинг-трейдер",
+    styleSwing: "свинг-трейдер",
+    levDesc: (m) => m > 500 ? `с экстремальным плечом (в среднем ×${m})` : m > 150 ? `с очень высоким плечом (в среднем ×${m})` : m > 50 ? `с высоким плечом (в среднем ×${m})` : m > 10 ? `с умеренным плечом (в среднем ×${m})` : `с невысоким плечом (в среднем ×${m})`,
+    concConcentrated: (a, pct) => `сконцентрирован на <b>${a}</b> (${pct}% сделок)`,
+    concSpread: (n) => `распределяешь сделки по ${n} инструментам`,
+    trendImprove: "улучшение",
+    trendDecline: "ухудшение",
+    trendMixed: "смешанная динамика",
+    gfSkew: (r) => `средний убыток в <b>${r}×</b> больше среднего профита — прибыль режется рано, убыткам даёшь течь`,
+    gfRevenge: (c) => `<b>${c}</b> сделок открыты вскоре после убытка — по времени отыгрыши`,
+    gfLossStreak: (l) => `серия из <b>${l}</b> убытков подряд`,
+    gfOversize: (c) => `<b>${c}</b> сделок с маржой заметно крупнее обычного`,
+    sec1Head: "1. Профиль стиля",
+    sec1Body: (style, med, lev, conc) => `Преимущественно <b>${style}</b> — медиана удержания ${med} мин. Торгуешь ${lev}, ${conc}.`,
+    sec2Head: (n) => `2. Параметры за ${n} сделок`,
+    sec2Total: (n) => `Всего сделок: <b>${n}</b>`,
+    sec2Winners: (w2, n, wr) => `Прибыльных: <b>${w2} из ${n}</b> (${wr}%)`,
+    sec2Best: (a, pos, s) => `Крупнейший профит: ${a} (<b style="color:${pos}">${s}</b>)`,
+    sec2Worst: (a, neg, s) => `Крупнейший убыток: ${a} (<b style="color:${neg}">${s}</b>)`,
+    sec2AvgWL: (w2, l) => `Средний профит / убыток: <b>${w2}</b> / <b>${l}</b>`,
+    sec2Size: (marginF, mAvg, notionK) => `Средняя маржа × плечо: $${marginF} × ×${mAvg} ≈ объём <b>$${notionK}</b>`,
+    sec2Stops: (sl) => `Сделок со стоп-лоссом: <b>${sl}%</b>`,
+    sec2Leverage: (avg, max) => `Плечо: среднее ×${avg}, макс ×${max}`,
+    sec2Duration: (med, min, max) => `Длительность: медиана ${med} мин (${min}–${max})`,
+    sec3Head: "3. Динамика",
+    sec3Body: (nc, ns, pct, wr, hist, bestA, bestS, worstA, worstS, trend) => `Чистый результат — <b style="color:${nc}">${ns}</b> (${pct}% депозита). Win rate ${wr}% против ${hist}% за всю историю. Лучший актив — <b>${bestA}</b> (${bestS}), слабее всего — <b>${worstA}</b> (${worstS}). Динамика: ${trend}.`,
+    sec4Head: "4. Риск-паттерны",
+    sec4Body: (mAvg, mcDist, expoMax, notionMaxK, sl, tail) => `Главный усилитель риска — плечо: при среднем ×${mAvg} margin call наступает при движении ~<b>${mcDist}%</b> против тебя. Максимальная позиция — <b>${expoMax}% депозита</b> (ноционал до $${notionMaxK}). Стоп-лосс стоял в <b>${sl}%</b> сделок${tail}`,
+    sec4NoSLTail: (noSL) => noSL > 0 ? ` — ${noSL} без защиты.` : ".",
+    sec5Head: "5. Эмоциональные паттерны",
+    sec5WithFlags: (flags) => `Заметно по данным: ${flags}.`,
+    sec5Clean: "Эмоциональных всплесков в этих сделках не видно: отыгрышей нет, объём не раздувается.",
+    sec6Head: "6. Вывод",
+    sec6StopLow: "Слабое место — <b>дисциплина по стопам</b>. ",
+    sec6StopOk: "Дисциплина по стопам в норме. ",
+    sec6LevHigh: "Плечо высокое — при снижении у маржи будет больше запаса на обычных колебаниях.",
+    sec6LevOk: "Плечо в разумных пределах.",
+    scoreConsistencyLabel: "Консистентность",
+    scoreConsistencyNote: (wr, ls) => `win rate ${wr}%, серия убытков ${ls}`,
+    scoreDisciplineLabel: "Дисциплина",
+    scoreDisciplineNote: (sl, mAvg, expo) => `стопы ${sl}%, плечо ×${mAvg}, маржа ${expo}%`,
+    scoreRationalLabel: "Рациональность",
+    scoreRationalNote: (rr, rev) => `R:R 1:${rr}, отыгрышей ${rev}`,
+    habitStop: "ставить стоп-лосс на каждую сделку (при высоком плече — обязательно)",
+    habitLeverage: "снизить плечо — оно кратно усиливает риск слить маржу",
+    habitCutLosses: "резать убытки быстрее и давать прибыли расти",
+    habitSize: "держать размер и плечо в разумных пределах",
+    // ---- UI chrome ------------------------------------------------------
+    greeting: (every, tc, balK) => `Я твой Trading Coach. После каждой сделки — короткий разбор по фактам, раз в ${every} сделок — полный обзор стиля, риска и привычек. Баланс ~$${balK}. <b style="color:${tc}">Сделай первую сделку.</b>`,
+    openReviewBtn: (every) => `📊 Открыть полный AI-разбор ${every} сделок`,
+    reviewCountdown: (left, tc, _rs) => `ещё <b style="color:${tc}">${left}</b> ${plural(left)} до AI-разбора`,
+    helpful: "Полезно?",
+    thanksUp: "Спасибо за отзыв.",
+    thanksDown: "Принято.",
+    reviewSubtitle: (n) => `разбор последних ${n} сделок`,
+    scoresHeading: (n) => `Оценки за ${n} сделок`,
+    habitHeading: (n) => `Привычка №1 на следующие ${n}:`,
+    reviewHelpfulQ: "Насколько полезен разбор?",
+    reviewDisclaimer: "AI может ошибаться. Это разбор поведения и риск-профиля, не инвестиционный совет.",
+    thanksRating: "Спасибо за оценку.",
+    headerStatus: "live • демо-счёт",
+    headerWatching: "слежу",
+    newTrades: (n) => `новых сделок: ${n}`,
+    // ---- entry-point toasts ---------------------------------------------
+    reviewReadyToastPrefix: (every) => `🧠 AI Trading Review ${every} сделок готов • `,
+    tradeToast: (signed, alias) => `Сделка ${signed} — ${alias}`
+  };
 
-  // src/messages.ts
-  var LOSS = t(
-    [
-      "Ну что ж, <b>{a}</b> закрылась в минус на <b>{v}</b> — бывает у всех.",
-      "В этот раз не срослось: <b>{a}</b> ушла в <b>{v}</b>. Идём дальше. 🙂",
-      "Минус по <b>{a}</b> — <b>{v}</b>. Это часть игры, извлечём урок.",
-      "Не повезло — <b>{a}</b> закрылась в <b>{v}</b>. Не бери близко к сердцу.",
-      "<b>{a}</b> ушла в красную зону: <b>{v}</b>. Главное — что дальше."
-    ],
-    [
-      "Well, <b>{a}</b> closed at a loss of <b>{v}</b> — it happens to everyone.",
-      "Not this time: <b>{a}</b> went to <b>{v}</b>. Moving on. 🙂",
-      "A loss on <b>{a}</b> — <b>{v}</b>. Part of the game, let's learn from it.",
-      "Unlucky — <b>{a}</b> closed at <b>{v}</b>. Don't take it to heart.",
-      "<b>{a}</b> slipped into the red: <b>{v}</b>. What matters is what's next."
-    ]
-  );
-  var WIN = t(
-    [
-      "Красиво — плюс по <b>{a}</b> на <b>{v}</b>! 👍",
-      "Зелёная сделка: <b>{a}</b> закрыта в <b>{v}</b>. Молодец. 🙂",
-      "Ты зафиксировал <b>{v}</b> по <b>{a}</b> — хорошая работа. ✅",
-      "Вот так и надо — <b>{a}</b> в плюс на <b>{v}</b>.",
-      "В плюс по <b>{a}</b>: <b>{v}</b>. Так держать!"
-    ],
-    [
-      "Nice — a gain on <b>{a}</b> of <b>{v}</b>! 👍",
-      "Green trade: <b>{a}</b> closed at <b>{v}</b>. Well done. 🙂",
-      "You booked <b>{v}</b> on <b>{a}</b> — good work. ✅",
-      "That's the way — <b>{a}</b> up by <b>{v}</b>.",
-      "In the green on <b>{a}</b>: <b>{v}</b>. Keep it up!"
-    ]
-  );
-  var magW = (p) => p < 0.5 ? t("почти незаметный", "barely noticeable") : p < 1.5 ? t("небольшой", "small") : p < 4 ? t("заметный", "noticeable") : p < 8 ? t("существенный", "significant") : t("крупный", "large");
-  var magWW = (p) => p < 0.5 ? t("скромный", "modest") : p < 1.5 ? t("неплохой", "decent") : p < 4 ? t("хороший", "good") : p < 8 ? t("солидный", "solid") : t("крупный", "large");
+  // src/i18n.ts
+  var L = true ? ru : en;
 
   // src/detect.ts
   var REVENGE_WINDOW_MS = 20 * 6e4;
@@ -116,46 +191,35 @@
   var LONG_HOLD_FACTOR = 3;
   var LONG_HOLD_FLOOR_MIN = 30;
   var STREAK_MIN = 3;
-  var LEVERAGE_BANDS = [
-    { max: 10, text: (m, wp) => t(`низкое плечо <b>×${m}</b> — комфортный запас, ~${wp}% против тебя до margin call 👍`, `low leverage <b>×${m}</b> — comfortable buffer, ~${wp}% against you to a margin call 👍`) },
-    { max: 50, text: (m, wp) => t(`умеренное плечо <b>×${m}</b> — до margin call ~${wp}% движения против`, `moderate leverage <b>×${m}</b> — ~${wp}% adverse move to a margin call`) },
-    { max: 150, text: (m, wp) => t(`высокое плечо <b>×${m}</b> — риск ощутимый: ~${wp}% против тебя уже съедает позицию`, `high leverage <b>×${m}</b> — real risk: ~${wp}% against you already eats the position`) },
-    { max: 500, text: (m, wp) => t(`очень высокое плечо <b>×${m}</b> — на грани: ~${wp}% против почти обнуляет вложенное`, `very high leverage <b>×${m}</b> — on the edge: ~${wp}% against nearly wipes your stake`) },
-    { max: Infinity, text: (m, wp) => t(`экстремальное плечо <b>×${m}</b> — хватает <b>~${wp}%</b> против, чтобы стереть позицию`, `extreme leverage <b>×${m}</b> — just <b>~${wp}%</b> against is enough to wipe the position`) }
-  ];
+  var LEVERAGE_BAND_MAX = [10, 50, 150, 500, Infinity];
   function detect(trade, all, list) {
-    var _a;
     const out = [];
     const p = pnl(trade), bal = S.bal, m = trade.mult, wp = wipe(m);
     const lastLoss = all.filter((x) => x.closeTime <= trade.startTime && pnl(x) < 0).sort((a, b) => a.closeTime - b.closeTime).pop();
     if (lastLoss && trade.startTime - lastLoss.closeTime <= REVENGE_WINDOW_MS)
-      out.push(t("Открыта <b>вскоре после убытка</b> — следи, чтобы это не был эмоциональный отыгрыш.", "Opened <b>shortly after a loss</b> — watch that this isn't an emotional revenge trade."));
+      out.push(L.revengeNote);
     const wpS = wp >= 1 ? wp.toFixed(1) : wp.toFixed(2);
-    out.push(((_a = LEVERAGE_BANDS.find((band) => m <= band.max)) != null ? _a : LEVERAGE_BANDS[LEVERAGE_BANDS.length - 1]).text(m, wpS));
-    if (trade.stopLossPrice == null && p < 0)
-      out.push(t("Без <b>стоп-лосса</b> — при таком плече убыток ничем не был ограничен.", "No <b>stop-loss</b> — at this leverage nothing capped the loss."));
-    else if (trade.stopLossPrice == null)
-      out.push(t("Без <b>стоп-лосса</b> — риск в сделке не был ограничен заранее.", "No <b>stop-loss</b> — the trade's risk wasn't capped in advance."));
+    const bandIdx = LEVERAGE_BAND_MAX.findIndex((max) => m <= max);
+    out.push(L.leverageBands[bandIdx < 0 ? L.leverageBands.length - 1 : bandIdx](m, wpS));
+    if (trade.stopLossPrice == null && p < 0) out.push(L.noStopOnLoss);
+    else if (trade.stopLossPrice == null) out.push(L.noStop);
     const expo = bal ? trade.sumInv / bal * 100 : 0;
-    if (expo >= CONCENTRATION_PCT)
-      out.push(t(`В одной позиции было <b>${expo.toFixed(0)}% депозита</b> — высокая концентрация капитала под риском.`, `This position held <b>${expo.toFixed(0)}% of the deposit</b> — high capital concentration at risk.`));
+    if (expo >= CONCENTRATION_PCT) out.push(L.concentration(expo.toFixed(0)));
     if (S.medSum && trade.sumInv > S.medSum * OVERSIZE_FACTOR)
-      out.push(t(`Маржа <b>крупнее обычного</b> (~$${fmt(trade.sumInv)} против медианы ~$${fmt(S.medSum)}).`, `Margin <b>larger than usual</b> (~$${fmt(trade.sumInv)} vs a median of ~$${fmt(S.medSum)}).`));
+      out.push(L.oversizeMargin(fmt(trade.sumInv), fmt(S.medSum)));
     const d = (trade.closeTime - trade.startTime) / 6e4;
     if (S.medDur && d > Math.max(S.medDur * LONG_HOLD_FACTOR, LONG_HOLD_FLOOR_MIN) && p < 0)
-      out.push(t(`Позицию <b>держал долго</b> (${Math.round(d)} мин) — убыток тянулся дольше обычного.`, `Held <b>a long time</b> (${Math.round(d)} min) — the loss ran longer than usual.`));
+      out.push(L.longHold(Math.round(d)));
     let streak = 1;
     for (let i = list.length - 2; i >= 0; i--) {
       const q = pnl(list[i]);
       if (q !== 0 && p !== 0 && q > 0 === p > 0) streak++;
       else break;
     }
-    if (p > 0 && streak >= STREAK_MIN)
-      out.push(t(`Это <b>${streak}-я прибыль подряд</b> 🔥 — серия идёт, но не поднимай плечо на азарте.`, `That's <b>${streak} wins in a row</b> 🔥 — nice streak, but don't raise leverage on the buzz.`));
-    if (p < 0 && streak >= STREAK_MIN)
-      out.push(t(`Уже <b>${streak}-й убыток подряд</b> — хороший момент сделать паузу.`, `Already <b>${streak} losses in a row</b> — a good moment to pause.`));
+    if (p > 0 && streak >= STREAK_MIN) out.push(L.winStreak(streak));
+    if (p < 0 && streak >= STREAK_MIN) out.push(L.lossStreak(streak));
     if (list.length >= 2 && list[list.length - 2].alias === trade.alias)
-      out.push(t(`Снова <b>${trade.alias}</b> — заметна концентрация на одном инструменте.`, `Again <b>${trade.alias}</b> — you're concentrating on one instrument.`));
+      out.push(L.sameInstrument(trade.alias));
     return out;
   }
 
@@ -170,37 +234,18 @@
     const notion = trade.sumInv * trade.mult;
     const mood = p < 0 ? "😕" : p > 0 ? "✅" : "➖";
     const acc = p < 0 ? C.br : p > 0 ? C.pos : C.t2;
-    const ti = p < 0 ? t("Разбор сделки: минус", "Trade review: loss") : p > 0 ? t("Разбор сделки: плюс", "Trade review: profit") : t("Сделка в ноль", "Break-even trade");
-    const head = p === 0 ? t(`Сделка по <b>${trade.alias}</b> закрылась в ноль.`, `Your <b>${trade.alias}</b> trade closed at break-even.`) : rotate(p < 0 ? LOSS : WIN, p < 0 ? "l" : "w").replace("{a}", trade.alias).replace("{v}", sgn(p));
+    const ti = p < 0 ? L.cardTitleLoss : p > 0 ? L.cardTitleWin : L.cardTitleFlat;
+    const head = p === 0 ? L.breakEvenHead(trade.alias) : rotate(p < 0 ? L.lossOpeners : L.winOpeners, p < 0 ? "l" : "w").replace("{a}", trade.alias).replace("{v}", sgn(p));
     const pctS = pct > 0 ? pct.toFixed(2) === "0.00" ? "0.01" : pct.toFixed(2) : "0.00";
-    const balS = p < 0 ? t(` Это <b>${magW(pct)}</b> убыток — <b style="color:${C.neg}">−${pctS}%</b> депозита ($${fk(bal)}).`, ` A <b>${magW(pct)}</b> loss — <b style="color:${C.neg}">−${pctS}%</b> of your deposit ($${fk(bal)}).`) : p > 0 ? t(` ${capitalize(magWW(pct))} плюс — <b style="color:${C.pos}">${pctS}%</b> депозита ($${fk(bal)}).`, ` ${capitalize(magWW(pct))} gain — <b style="color:${C.pos}">${pctS}%</b> of your deposit ($${fk(bal)}).`) : "";
-    const moveS = trade.mult >= MOVE_LEVERAGE_MIN ? t(` ⚙️ Цена прошла всего <b>${move >= 0 ? "+" : ""}${move.toFixed(2)}%</b>, но плечо <b>×${trade.mult}</b> превратило это в <b style="color:${p < 0 ? C.neg : C.pos}">${pin >= 0 ? "+" : ""}${pin.toFixed(1)}%</b> от вложенного (объём ~$${fk(notion)}).`, ` ⚙️ Price moved only <b>${move >= 0 ? "+" : ""}${move.toFixed(2)}%</b>, but <b>×${trade.mult}</b> leverage turned it into <b style="color:${p < 0 ? C.neg : C.pos}">${pin >= 0 ? "+" : ""}${pin.toFixed(1)}%</b> of your invested (volume ~$${fk(notion)}).`) : "";
-    const patsArr = detect(trade, all, list).slice(0, MAX_PATTERNS);
-    const nudge = p < 0 && trade.stopLossPrice == null ? rotate(
-      t(
-        [
-          "Мягкий совет на будущее: при таком плече стоп-лосс — твой лучший друг, он бы аккуратно сгладил этот минус.",
-          "Без давления — но SL в следующий раз тихо ограничит просадку. Стоит сделать привычкой."
-        ],
-        [
-          "A gentle tip for next time: at this leverage a stop-loss is your best friend — it would have softened this dip.",
-          "No pressure — but an SL next time quietly caps the drawdown. Worth making a habit."
-        ]
-      ),
-      "nsl"
-    ) : p > 0 && trade.stopLossPrice != null ? rotate(
-      t(
-        [
-          "Плюс и со стопом — вот это по-чемпионски. 👏",
-          "В плюс и под защитой стопа — красота, так держи."
-        ],
-        [
-          "Profit and a stop in place — that's championship stuff. 👏",
-          "In the green and protected by a stop — lovely, keep it up."
-        ]
-      ),
-      "good"
+    const balS = p < 0 ? L.lossDeposit(C.neg, pctS, fk(bal)) : p > 0 ? L.gainDeposit(C.pos, pctS, fk(bal)) : "";
+    const moveS = trade.mult >= MOVE_LEVERAGE_MIN ? L.leverageAmp(
+      `${move >= 0 ? "+" : ""}${move.toFixed(2)}`,
+      trade.mult,
+      p < 0 ? C.neg : C.pos,
+      `${pin >= 0 ? "+" : ""}${pin.toFixed(1)}`,
+      fk(notion)
     ) : "";
+    const patsArr = detect(trade, all, list).slice(0, MAX_PATTERNS);
     const blocks = [`<div style="line-height:1.6">${head}${balS}</div>`];
     if (moveS)
       blocks.push(
@@ -212,17 +257,13 @@
           (x, i) => `<div style="display:flex;gap:8px;line-height:1.5${i ? ";margin-top:6px" : ""}"><span style="color:${C.br};font-weight:800">•</span><span>${x}</span></div>`
         ).join("") + `</div>`
       );
-    if (nudge)
-      blocks.push(
-        `<div style="margin-top:11px;background:rgba(255,164,8,.09);border:1px solid rgba(255,164,8,.30);border-radius:10px;padding:9px 11px;line-height:1.5">💡 ${nudge}</div>`
-      );
     return {
       m: mood,
       a: acc,
       ti,
       h: blocks.join(""),
       chip: trade.alias,
-      time: new Date(trade.closeTime).toLocaleTimeString(t("ru-RU", "en-US"), { hour: "2-digit", minute: "2-digit" })
+      time: new Date(trade.closeTime).toLocaleTimeString(L.timeLocale, { hour: "2-digit", minute: "2-digit" })
     };
   }
 
@@ -293,57 +334,60 @@
     const disc = Math.max(1, Math.min(10, Math.round(slp / 100 * 5 + (mAvg <= 10 ? 3 : mAvg <= 50 ? 1 : 0) + (expoMax < 20 ? 2 : 0))));
     const cons = Math.max(1, Math.min(10, Math.round(wr / 10 * 0.6 + (mls <= 2 ? 4 : mls <= 4 ? 2 : 0))));
     const rat = Math.max(1, Math.min(10, Math.round(10 - Math.min(6, rr) - (revenge > 2 ? 2 : revenge > 0 ? 1 : 0) - (mAvg >= 200 ? 1 : 0))));
-    const styleName = dMed < 3 ? t("скальпер", "scalper") : dMed < 60 ? t("внутридневной трейдер", "intraday trader") : dMed < 1440 ? t("дей/свинг-трейдер", "day/swing trader") : t("свинг-трейдер", "swing trader");
-    const levDesc = mAvg > 500 ? t(`с экстремальным плечом (в среднем ×${mAvg})`, `with extreme leverage (avg ×${mAvg})`) : mAvg > 150 ? t(`с очень высоким плечом (в среднем ×${mAvg})`, `with very high leverage (avg ×${mAvg})`) : mAvg > 50 ? t(`с высоким плечом (в среднем ×${mAvg})`, `with high leverage (avg ×${mAvg})`) : mAvg > 10 ? t(`с умеренным плечом (в среднем ×${mAvg})`, `with moderate leverage (avg ×${mAvg})`) : t(`с невысоким плечом (в среднем ×${mAvg})`, `with modest leverage (avg ×${mAvg})`);
-    const concDesc = conc > 60 ? t(`сильно сконцентрирован на <b>${topA}</b> (${conc}% сделок)`, `heavily concentrated in <b>${topA}</b> (${conc}% of trades)`) : t(`распределяешь сделки по ${nAss} инструментам`, `spread across ${nAss} instruments`);
-    const trend = wr >= lwr && net >= 0 ? t("в целом улучшение", "an overall improvement") : net < 0 ? t("скорее ухудшение", "more of a decline") : t("смешанная динамика", "mixed dynamics");
+    const styleName = dMed < 3 ? L.styleScalper : dMed < 60 ? L.styleIntraday : dMed < 1440 ? L.styleDaySwing : L.styleSwing;
+    const levDesc = L.levDesc(mAvg);
+    const concDesc = conc > 60 ? L.concConcentrated(topA, conc) : L.concSpread(nAss);
+    const trend = wr >= lwr && net >= 0 ? L.trendImprove : net < 0 ? L.trendDecline : L.trendMixed;
     const gf = [];
-    if (rr > 3) gf.push(t(`прибыль фиксируется рано, а убыткам даёшь течь — средний убыток в <b>${Math.round(rr)}×</b> больше среднего профита (классический перекос)`, `profits are booked early but losses run — the average loss is <b>${Math.round(rr)}×</b> the average win (a classic skew)`));
-    if (revenge > 0) gf.push(t(`<b>${revenge}</b> сделок открыты вскоре после убытка — возможные эмоциональные отыгрыши`, `<b>${revenge}</b> trades opened soon after a loss — possible emotional revenge trades`));
-    if (mls >= 3) gf.push(t(`была серия из <b>${mls}</b> убытков подряд — момент, где важно не повышать ставки`, `there was a streak of <b>${mls}</b> losses in a row — a moment where it matters not to raise stakes`));
-    if (over > 0) gf.push(t(`<b>${over}</b> сделок с маржой заметно крупнее обычного`, `<b>${over}</b> trades with margin notably larger than usual`));
+    if (rr > 3) gf.push(L.gfSkew(Math.round(rr)));
+    if (revenge > 0) gf.push(L.gfRevenge(revenge));
+    if (mls >= 3) gf.push(L.gfLossStreak(mls));
+    if (over > 0) gf.push(L.gfOversize(over));
+    const netColour = net >= 0 ? C.pos : C.neg;
+    const pctNetS = `${pctNet >= 0 ? "+" : ""}${pctNet.toFixed(1)}`;
     const sections = [
       {
-        h: t("1. Профиль стиля", "1. Style profile"),
-        html: t(`Ты преимущественно <b>${styleName}</b> — медиана удержания ${dMed} мин. Торгуешь ${levDesc}, ${concDesc}.`, `You're mostly a <b>${styleName}</b> — median hold ${dMed} min. You trade ${levDesc}, ${concDesc}.`)
+        h: L.sec1Head,
+        html: L.sec1Body(styleName, dMed, levDesc, concDesc)
       },
       {
-        h: t(`2. Параметры за ${n} сделок`, `2. Parameters over ${n} trades`),
+        h: L.sec2Head(n),
         list: [
-          t(`Всего сделок: <b>${n}</b>`, `Total trades: <b>${n}</b>`),
-          t(`Прибыльных: <b>${wins.length} из ${n}</b> (${wr}%)`, `Winners: <b>${wins.length} of ${n}</b> (${wr}%)`),
-          t(`Крупнейший профит: ${bestTrade.alias} (<b style="color:${C.pos}">${sgn(pnl(bestTrade))}</b>)`, `Largest profit: ${bestTrade.alias} (<b style="color:${C.pos}">${sgn(pnl(bestTrade))}</b>)`),
-          t(`Крупнейший убыток: ${worstTrade.alias} (<b style="color:${C.neg}">${sgn(pnl(worstTrade))}</b>)`, `Largest loss: ${worstTrade.alias} (<b style="color:${C.neg}">${sgn(pnl(worstTrade))}</b>)`),
-          t(`Средний профит / убыток: <b>${sgn(avgW)}</b> / <b>${sgn(avgL)}</b>`, `Average profit / loss: <b>${sgn(avgW)}</b> / <b>${sgn(avgL)}</b>`),
-          t(`Средняя маржа × плечо: $${fmt(avgSum)} × ×${mAvg} ≈ объём <b>$${fk(avgNot)}</b>`, `Average margin × leverage: $${fmt(avgSum)} × ×${mAvg} ≈ volume <b>$${fk(avgNot)}</b>`),
-          t(`Сделок со стоп-лоссом: <b>${slp}%</b>`, `Trades with a stop-loss: <b>${slp}%</b>`),
-          t(`Плечо: среднее ×${mAvg}, макс ×${mMax}`, `Leverage: avg ×${mAvg}, max ×${mMax}`),
-          t(`Длительность: медиана ${dMed} мин (${dMin}–${dMax})`, `Duration: median ${dMed} min (${dMin}–${dMax})`)
+          L.sec2Total(n),
+          L.sec2Winners(wins.length, n, wr),
+          L.sec2Best(bestTrade.alias, C.pos, sgn(pnl(bestTrade))),
+          L.sec2Worst(worstTrade.alias, C.neg, sgn(pnl(worstTrade))),
+          L.sec2AvgWL(sgn(avgW), sgn(avgL)),
+          L.sec2Size(fmt(avgSum), mAvg, fk(avgNot)),
+          L.sec2Stops(slp),
+          L.sec2Leverage(mAvg, mMax),
+          L.sec2Duration(dMed, dMin, dMax)
         ]
       },
       {
-        h: t("3. Динамика", "3. Dynamics"),
-        html: t(`Чистый результат — <b style="color:${net >= 0 ? C.pos : C.neg}">${sgn(net)}</b> (${pctNet >= 0 ? "+" : ""}${pctNet.toFixed(1)}% депозита). Win rate ${wr}% против ${lwr}% за всю историю. Лучший актив — <b>${bestA}</b> (${sgn(by[bestA])}), слабее всего — <b>${worstA}</b> (${sgn(by[worstA])}). Это ${trend}.`, `Net result — <b style="color:${net >= 0 ? C.pos : C.neg}">${sgn(net)}</b> (${pctNet >= 0 ? "+" : ""}${pctNet.toFixed(1)}% of deposit). Win rate ${wr}% vs ${lwr}% over your whole history. Best asset — <b>${bestA}</b> (${sgn(by[bestA])}), weakest — <b>${worstA}</b> (${sgn(by[worstA])}). This is ${trend}.`)
+        h: L.sec3Head,
+        html: L.sec3Body(netColour, sgn(net), pctNetS, wr, lwr, bestA, sgn(by[bestA]), worstA, sgn(by[worstA]), trend)
       },
       {
-        h: t("4. Риск-паттерны", "4. Risk patterns"),
-        html: t(`Главный усилитель риска — плечо: при среднем ×${mAvg} margin call наступает при движении всего ~<b>${mcDist.toFixed(1)}%</b> против тебя. Максимальная позиция занимала <b>${expoMax}% депозита</b> (ноционал до $${fk(notMax)}). Стоп-лосс стоял в <b>${slp}%</b> сделок${noSL > 0 ? ` — ${noSL} без защиты.` : "."}`, `The main risk amplifier is leverage: at an average of ×${mAvg} a margin call hits after just ~<b>${mcDist.toFixed(1)}%</b> against you. The largest position took <b>${expoMax}% of the deposit</b> (notional up to $${fk(notMax)}). A stop-loss was set on <b>${slp}%</b> of trades${noSL > 0 ? ` — ${noSL} unprotected.` : "."}`)
+        h: L.sec4Head,
+        html: L.sec4Body(mAvg, mcDist.toFixed(1), expoMax, fk(notMax), slp, L.sec4NoSLTail(noSL))
       },
       {
-        h: t("5. Жадность и страх", "5. Greed & fear"),
-        html: gf.length ? t(`Пара вещей, которые мягко подмечу: ${gf.join("; ")}. Ничего страшного — просто чтобы ты это видел.`, `A couple of things worth noting: ${gf.join("; ")}. Nothing dramatic — just so you see it.`) : t("Явных эмоциональных всплесков не вижу — ни отыгрышей, ни резких раздуваний объёма. Ты держишь холодную голову 🕊 красиво.", "No obvious emotional spikes — no revenge trades, no sudden size inflation. You're keeping a cool head 🕊 nice.")
+        h: L.sec5Head,
+        html: gf.length ? L.sec5WithFlags(gf.join("; ")) : L.sec5Clean
       },
       {
-        h: t("6. Прогресс и вывод", "6. Progress & takeaway"),
-        html: (slp < 50 ? t("Если и есть что подтянуть — это <b>дисциплина по стопам</b>, и, честно, одно это изменило бы многое. ", "If there's one thing to work on, it's <b>stop-loss discipline</b> — and honestly, that alone would change a lot. ") : t("Дисциплина по стопам у тебя на уровне — так держать. ", "Your stop-loss discipline is at a good level — keep it up. ")) + (mAvg >= 100 ? t("А если чуть снизить плечо, у маржи будет больше воздуха на обычных колебаниях.", "And easing off the leverage a little would give your margin more room on ordinary swings.") : t("Плечо в разумных пределах — это бережёт твой счёт.", "Your leverage is within reason — that protects your account."))
+        h: L.sec6Head,
+        html: (slp < 50 ? L.sec6StopLow : L.sec6StopOk) + (mAvg >= 100 ? L.sec6LevHigh : L.sec6LevOk)
       }
     ];
+    const rrS = rr > 50 ? "∞" : rr.toFixed(1);
     const scores = [
-      [t("Консистентность", "Consistency"), cons, t(`win rate ${wr}%, серия убытков ${mls}`, `win rate ${wr}%, loss streak ${mls}`)],
-      [t("Дисциплина", "Discipline"), disc, t(`стопы ${slp}%, плечо ×${mAvg}, маржа ${expoMax}%`, `stops ${slp}%, leverage ×${mAvg}, margin ${expoMax}%`)],
-      [t("Рациональность", "Rational"), rat, t(`R:R 1:${rr > 50 ? "∞" : rr.toFixed(1)}, отыгрышей ${revenge}`, `R:R 1:${rr > 50 ? "∞" : rr.toFixed(1)}, revenge ${revenge}`)]
+      [L.scoreConsistencyLabel, cons, L.scoreConsistencyNote(wr, mls)],
+      [L.scoreDisciplineLabel, disc, L.scoreDisciplineNote(slp, mAvg, expoMax)],
+      [L.scoreRationalLabel, rat, L.scoreRationalNote(rrS, revenge)]
     ];
-    const habit = slp < 50 ? t("ставить стоп-лосс на каждую сделку (при высоком плече — обязательно)", "set a stop-loss on every trade (mandatory at high leverage)") : mAvg >= 100 ? t("снизить плечо — оно кратно усиливает риск слить маржу", "lower your leverage — it multiplies the risk of losing your margin") : rr > 3 ? t("резать убытки быстрее и давать прибыли расти", "cut losses faster and let profits run") : t("держать размер и плечо в разумных пределах", "keep size and leverage within reason");
+    const habit = slp < 50 ? L.habitStop : mAvg >= 100 ? L.habitLeverage : rr > 3 ? L.habitCutLosses : L.habitSize;
     return { list, sections, scores, habit };
   }
 
@@ -385,15 +429,15 @@
   }
   function render() {
     if (!S.cards.length) {
-      elCard.innerHTML = `<div style="color:${C.t2};font-size:14px;line-height:1.55">${t(`Привет 👋 Я твой Trading Coach. После каждой сделки дам короткий честный разбор, а раз в ${REVIEW_EVERY} сделок — полный обзор твоего стиля, риска и привычек с оценками. Баланс ~$${fk(readBalance())}. <b style="color:${C.t}">Сделай первую сделку — и поехали.</b>`, `Hi 👋 I'm your Trading Coach. After every trade I'll give a short, honest read, and every ${REVIEW_EVERY} trades a full review of your style, risk and habits with scores. Balance ~$${fk(readBalance())}. <b style="color:${C.t}">Make your first trade and we're off.</b>`)}</div>`;
+      elCard.innerHTML = `<div style="color:${C.t2};font-size:14px;line-height:1.55">${L.greeting(REVIEW_EVERY, C.t, fk(readBalance()))}</div>`;
       elPos.textContent = "–";
       return;
     }
     if (S.idx < 0) S.idx = 0;
     if (S.idx > S.cards.length - 1) S.idx = S.cards.length - 1;
     const c = S.cards[S.idx];
-    const foot = c.review ? `<button id="lbxRev" style="margin-top:14px;margin-left:10px;border:0;cursor:pointer;font:700 14px ${C.font};background:${C.br};color:#000;padding:12px 16px;border-radius:11px;width:calc(100% - 10px)">${t(`📊 Открыть подробный AI-разбор ${REVIEW_EVERY} сделок`, `📊 Open the full AI review of ${REVIEW_EVERY} trades`)}</button>` : c.left ? `<div style="margin-top:14px;margin-left:10px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:6px;background:${C.rs};border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${(REVIEW_EVERY - c.left) / REVIEW_EVERY * 100}%;background:${C.br}"></i></div><span style="font-size:12px;color:${C.t2};white-space:nowrap">${t(`ещё <b style="color:${C.t}">${c.left}</b> ${plural(c.left)} до AI-разбора`, `<b style="color:${C.t}">${c.left}</b> more trade${c.left === 1 ? "" : "s"} to your AI review`)}</span></div>` : "";
-    const feedback = `<div style="margin-top:13px;margin-left:10px;padding-top:11px;border-top:1px solid ${C.line};display:flex;align-items:center;gap:9px"><span style="font-size:11px;color:${C.t2}">${t("Полезно?", "Helpful?")}</span><button id="lbxUp" style="border:1px solid ${c.vote === "up" ? C.pos : C.line};background:${c.vote === "up" ? "rgba(83,166,66,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👍</button><button id="lbxDn" style="border:1px solid ${c.vote === "down" ? C.neg : C.line};background:${c.vote === "down" ? "rgba(230,69,69,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👎</button></div>`;
+    const foot = c.review ? `<button id="lbxRev" style="margin-top:14px;margin-left:10px;border:0;cursor:pointer;font:700 14px ${C.font};background:${C.br};color:#000;padding:12px 16px;border-radius:11px;width:calc(100% - 10px)">${L.openReviewBtn(REVIEW_EVERY)}</button>` : c.left ? `<div style="margin-top:14px;margin-left:10px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:6px;background:${C.rs};border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${(REVIEW_EVERY - c.left) / REVIEW_EVERY * 100}%;background:${C.br}"></i></div><span style="font-size:12px;color:${C.t2};white-space:nowrap">${L.reviewCountdown(c.left, C.t, C.rs)}</span></div>` : "";
+    const feedback = `<div style="margin-top:13px;margin-left:10px;padding-top:11px;border-top:1px solid ${C.line};display:flex;align-items:center;gap:9px"><span style="font-size:11px;color:${C.t2}">${L.helpful}</span><button id="lbxUp" style="border:1px solid ${c.vote === "up" ? C.pos : C.line};background:${c.vote === "up" ? "rgba(83,166,66,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👍</button><button id="lbxDn" style="border:1px solid ${c.vote === "down" ? C.neg : C.line};background:${c.vote === "down" ? "rgba(230,69,69,.15)" : C.sf};color:${C.t};cursor:pointer;font-size:15px;border-radius:8px;padding:4px 10px">👎</button></div>`;
     elCard.innerHTML = `<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><span style="font-size:24px">${c.m}</span><span style="font:400 12px/16px ${C.font};color:${C.t2};background:${C.sf};border:1px solid ${C.line};padding:3px 7px;border-radius:4px">${c.chip}</span><span style="margin-left:auto;font-size:11px;color:${C.t2};font-family:monospace">${c.time}</span></div><div style="font-weight:700;font-size:16px;margin-bottom:8px;border-left:3px solid ${c.a};padding-left:10px;margin-left:-2px">${c.ti}</div><div style="font-size:14px;line-height:1.6;color:#cdd6e4;padding-left:10px">${c.h}</div>` + foot + feedback;
     elPos.textContent = `${S.idx + 1} / ${S.cards.length}`;
     const rv = box.querySelector("#lbxRev");
@@ -405,12 +449,12 @@
     if (up) up.onclick = () => {
       c.vote = "up";
       render();
-      toast(t("Спасибо за отзыв! 👍", "Thanks for the feedback! 👍"), C.pos);
+      toast(L.thanksUp, C.pos);
     };
     if (dn) dn.onclick = () => {
       c.vote = "down";
       render();
-      toast(t("Понял, спасибо 👎", "Got it, thanks 👎"), C.t2);
+      toast(L.thanksDown, C.t2);
     };
   }
   function toast(txt, col) {
@@ -432,7 +476,7 @@
       (s) => `<div style="background:${C.sf};border:1px solid ${C.line};border-radius:12px;padding:11px"><div style="font-size:10px;color:${C.t2};text-transform:uppercase">${s[0]}</div><div style="font:700 22px monospace;margin:3px 0 6px">${s[1]}<span style="font-size:11px;color:${C.t2}">/10</span></div><div style="height:5px;background:${C.rs};border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${s[1] * 10}%;background:${C.br}"></i></div><div style="font-size:9.5px;color:${C.t2};margin-top:6px;line-height:1.3">${s[2]}</div></div>`
     ).join("");
     const starsHtml = [0, 1, 2, 3, 4].map((i) => `<span data-i="${i}" style="cursor:pointer;color:${C.t2}">★</span>`).join("");
-    o.innerHTML = `<div style="width:100%;max-height:92vh;overflow:auto;background:linear-gradient(180deg,#1b1b1b,#141414);border-top:1px solid rgba(255,164,8,.5);border-radius:20px 20px 0 0;color:${C.t}"><div style="width:40px;height:5px;border-radius:4px;background:${C.line};margin:9px auto 2px"></div><div style="display:flex;align-items:center;gap:10px;padding:12px 17px;border-bottom:1px solid ${C.line};position:sticky;top:0;background:#191919"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><div><b style="font-size:16px">AI Trading Review</b><div style="font-size:11px;color:${C.t2}">${t(`разбор последних ${r.list.length} сделок`, `review of your last ${r.list.length} trades`)}</div></div><span style="margin-left:auto;cursor:pointer;color:${C.t2};font-size:28px;line-height:1" id="lbxRvX">×</span></div><div style="padding:6px 18px 30px">${secH}<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${C.t2};margin:16px 0 8px">${t(`Оценки за ${r.list.length} сделок`, `Scores over ${r.list.length} trades`)}</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">${scH}</div><div style="margin-top:16px;background:rgba(255,164,8,.10);border:1px solid rgba(255,164,8,.35);border-radius:12px;padding:13px;font-size:14px"><b style="color:${C.br}">${t(`Привычка №1 на следующие ${r.list.length}:`, `Habit #1 for the next ${r.list.length}:`)}</b> ${r.habit}.</div><div style="margin-top:16px;text-align:center"><div style="font-size:12px;color:${C.t2};margin-bottom:8px">${t("Насколько полезен разбор?", "How helpful was this review?")}</div><div id="lbxStars" style="display:flex;justify-content:center;gap:7px;font-size:27px">${starsHtml}</div><div id="lbxStarMsg" style="font-size:11px;color:${C.pos};margin-top:7px;height:14px"></div></div><div style="margin-top:14px;font-size:12px;color:${C.t2};font-style:italic">${t("AI может ошибаться. Разбор поведения и риск-профиля, не инвестиционный совет.", "AI can make mistakes. A review of behaviour and risk profile, not investment advice.")}</div></div></div>`;
+    o.innerHTML = `<div style="width:100%;max-height:92vh;overflow:auto;background:linear-gradient(180deg,#1b1b1b,#141414);border-top:1px solid rgba(255,164,8,.5);border-radius:20px 20px 0 0;color:${C.t}"><div style="width:40px;height:5px;border-radius:4px;background:${C.line};margin:9px auto 2px"></div><div style="display:flex;align-items:center;gap:10px;padding:12px 17px;border-bottom:1px solid ${C.line};position:sticky;top:0;background:#191919"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;color:#000;font-weight:800">⛨</div><div><b style="font-size:16px">AI Trading Review</b><div style="font-size:11px;color:${C.t2}">${L.reviewSubtitle(r.list.length)}</div></div><span style="margin-left:auto;cursor:pointer;color:${C.t2};font-size:28px;line-height:1" id="lbxRvX">×</span></div><div style="padding:6px 18px 30px">${secH}<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${C.t2};margin:16px 0 8px">${L.scoresHeading(r.list.length)}</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">${scH}</div><div style="margin-top:16px;background:rgba(255,164,8,.10);border:1px solid rgba(255,164,8,.35);border-radius:12px;padding:13px;font-size:14px"><b style="color:${C.br}">${L.habitHeading(r.list.length)}</b> ${r.habit}.</div><div style="margin-top:16px;text-align:center"><div style="font-size:12px;color:${C.t2};margin-bottom:8px">${L.reviewHelpfulQ}</div><div id="lbxStars" style="display:flex;justify-content:center;gap:7px;font-size:27px">${starsHtml}</div><div id="lbxStarMsg" style="font-size:11px;color:${C.pos};margin-top:7px;height:14px"></div></div><div style="margin-top:14px;font-size:12px;color:${C.t2};font-style:italic">${L.reviewDisclaimer}</div></div></div>`;
     document.body.appendChild(o);
     o.querySelector("#lbxRvX").onclick = () => o.remove();
     o.onclick = (e) => {
@@ -446,14 +490,14 @@
       star.onclick = () => {
         r.rating = i + 1;
         paint(i);
-        starMsg.textContent = t("Спасибо за оценку! 🙏", "Thanks for rating! 🙏");
+        starMsg.textContent = L.thanksRating;
       };
     });
     o.querySelector("#lbxStars").onmouseleave = () => paint((r.rating || 0) - 1);
     if (r.rating) paint(r.rating - 1);
   }
   function updateCounter(n) {
-    elCnt.textContent = t(`новых сделок: ${n}`, `new trades: ${n}`);
+    elCnt.textContent = L.newTrades(n);
     const pip = pill.querySelector("#lbxPip");
     if (pip) pip.textContent = String(n);
   }
@@ -466,7 +510,7 @@
   function mount() {
     box = document.createElement("div");
     box.style.cssText = `position:fixed;left:8px;right:8px;bottom:${NAV}px;z-index:2147483000;background:linear-gradient(180deg,#1b1b1b,#141414);border:1px solid rgba(255,164,8,.45);border-radius:18px;box-shadow:0 0 0 1px rgba(255,164,8,.18),0 18px 50px -14px rgba(0,0,0,.85);font-family:${C.font};color:${C.t};overflow:hidden`;
-    box.innerHTML = `<div style="display:flex;align-items:center;gap:9px;padding:12px 13px;border-bottom:1px solid ${C.line};background:linear-gradient(180deg,rgba(255,164,8,.10),transparent)"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;font-weight:800;color:#000;font-size:16px">⛨</div><div style="font-weight:700;font-size:15px;line-height:1.1">Trading Coach<div style="font-weight:500;font-size:11px;color:${C.t2}">${t("live • демо-счёт", "live • demo account")}</div></div><div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:${C.t2}"><span style="width:8px;height:8px;border-radius:50%;background:${C.pos};box-shadow:0 0 0 4px rgba(83,166,66,.15)"></span>${t("слежу", "watching")}</div><button id="lbxMin" style="width:32px;height:32px;border:0;background:${C.rs};color:${C.t2};cursor:pointer;font-size:18px;border-radius:9px;margin-left:4px">–</button></div><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid ${C.line};color:${C.t2};font-size:12px"><span id="lbxCnt">${t(`новых сделок: ${S.newCount}`, `new trades: ${S.newCount}`)}</span><span style="display:flex;gap:8px;align-items:center"><button id="lbxPrev" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">‹</button><span id="lbxPos" style="min-width:46px;text-align:center;font-family:monospace">–</span><button id="lbxNext" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">›</button></span></div><div id="lbxCard" style="padding:15px 15px 17px;max-height:66vh;overflow:auto"></div>`;
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:9px;padding:12px 13px;border-bottom:1px solid ${C.line};background:linear-gradient(180deg,rgba(255,164,8,.10),transparent)"><div style="width:30px;height:30px;border-radius:9px;background:${C.br};display:grid;place-items:center;font-weight:800;color:#000;font-size:16px">⛨</div><div style="font-weight:700;font-size:15px;line-height:1.1">Trading Coach<div style="font-weight:500;font-size:11px;color:${C.t2}">${L.headerStatus}</div></div><div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:${C.t2}"><span style="width:8px;height:8px;border-radius:50%;background:${C.pos};box-shadow:0 0 0 4px rgba(83,166,66,.15)"></span>${L.headerWatching}</div><button id="lbxMin" style="width:32px;height:32px;border:0;background:${C.rs};color:${C.t2};cursor:pointer;font-size:18px;border-radius:9px;margin-left:4px">–</button></div><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid ${C.line};color:${C.t2};font-size:12px"><span id="lbxCnt">${L.newTrades(S.newCount)}</span><span style="display:flex;gap:8px;align-items:center"><button id="lbxPrev" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">‹</button><span id="lbxPos" style="min-width:46px;text-align:center;font-family:monospace">–</span><button id="lbxNext" style="width:32px;height:32px;border:1px solid ${C.line};background:${C.sf};color:${C.t};border-radius:8px;cursor:pointer;font-size:16px">›</button></span></div><div id="lbxCard" style="padding:15px 15px 17px;max-height:66vh;overflow:auto"></div>`;
     document.body.appendChild(box);
     pill = document.createElement("div");
     pill.style.cssText = `position:fixed;top:116px;right:8px;z-index:2147483000;display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:40px;cursor:grab;background:linear-gradient(180deg,#2a2314,#1b1b1b);border:1.5px solid #FFA408;box-shadow:0 0 0 1px rgba(255,164,8,.30),0 6px 22px -4px rgba(255,164,8,.55),0 12px 34px -12px rgba(0,0,0,.75);font-family:${C.font};color:${C.t};touch-action:none;user-select:none;animation:lbxGlow 2.4s ease-in-out infinite`;
@@ -582,7 +626,7 @@
     render();
     const last = fresh[fresh.length - 1], lp = pnl(last);
     toast(
-      (S.newCount % REVIEW_EVERY === 0 ? t(`🧠 Готов AI Trading Review ${REVIEW_EVERY} сделок! • `, `🧠 AI Trading Review of ${REVIEW_EVERY} trades is ready! • `) : "") + t(`Сделка ${sgn(lp)} — ${last.alias}`, `Trade ${sgn(lp)} — ${last.alias}`),
+      (S.newCount % REVIEW_EVERY === 0 ? L.reviewReadyToastPrefix(REVIEW_EVERY) : "") + L.tradeToast(sgn(lp), last.alias),
       lp >= 0 ? C.pos : C.neg
     );
   }

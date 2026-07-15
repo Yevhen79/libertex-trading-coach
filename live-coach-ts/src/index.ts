@@ -18,7 +18,7 @@ import { S, readBalance } from "./state";
 import { buildComment } from "./comment";
 import { buildReview } from "./review";
 import { mount, unmount, render, toast, updateCounter } from "./ui";
-import { t } from "./i18n";
+import { L } from "./i18n";
 import type { Trade, ClosedPositionsResponse, CoachWindow } from "./types";
 
 const w = window as unknown as CoachWindow;
@@ -67,8 +67,8 @@ function processTrades(list: Trade[]): void {
 
   const last = fresh[fresh.length - 1], lp = pnl(last);
   toast(
-    (S.newCount % REVIEW_EVERY === 0 ? t(`🧠 Готов AI Trading Review ${REVIEW_EVERY} сделок! • `, `🧠 AI Trading Review of ${REVIEW_EVERY} trades is ready! • `) : "") +
-      t(`Сделка ${sgn(lp)} — ${last.alias}`, `Trade ${sgn(lp)} — ${last.alias}`),
+    (S.newCount % REVIEW_EVERY === 0 ? L.reviewReadyToastPrefix(REVIEW_EVERY) : "") +
+      L.tradeToast(sgn(lp), last.alias),
     lp >= 0 ? C.pos : C.neg,
   );
 }
