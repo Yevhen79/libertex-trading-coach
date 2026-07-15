@@ -4,6 +4,7 @@
   var API = "/spa/report/closed-positions?page=1&pageSize=100&order=CloseTime&orderDir=desc&searchPhrase=";
   var REVIEW_EVERY = 5;
   var POLL_MS = 15e3;
+  var REVENGE_WARNING_ENABLED = false;
   var NAV = 80;
   var C = {
     bg: "#111111",
@@ -743,7 +744,7 @@
     fresh.forEach((tr) => {
       S.seen[tr.ticket] = 1;
       const all = S.baseAll.concat(S.newTrades);
-      const sig = detectRevenge(tr, all);
+      const sig = REVENGE_WARNING_ENABLED ? detectRevenge(tr, all) : null;
       if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) warnRevenge(sig, tr.mult, tr.sumInv);
       S.newTrades.push(tr);
       S.newCount++;
@@ -800,10 +801,11 @@
   render();
   poll();
   var iv = setInterval(poll, POLL_MS);
-  var stopWatch = installOrderWatch((mult, margin) => {
+  var stopWatch = REVENGE_WARNING_ENABLED ? installOrderWatch((mult, margin) => {
     const sig = detectRevengePending(mult, margin, Date.now(), S.baseAll.concat(S.newTrades));
     if (sig) warnRevenge(sig, mult, margin);
-  });
+  }) : () => {
+  };
   w.__lbxCoachStop = () => {
     clearInterval(iv);
     stopWatch();

@@ -20,6 +20,14 @@ export const REVIEW_EVERY = 5;
 /** How often (ms) we re-poll the closed-positions feed. */
 export const POLL_MS = 15000;
 
+/**
+ * Master switch for the revenge-trade warning banner (both the pre-trade
+ * order-form path and the post-facto poll path). Temporarily OFF until its
+ * display is dialled in against the live terminal — flip to `true` to re-enable;
+ * all the detection code stays intact.
+ */
+export const REVENGE_WARNING_ENABLED = false;
+
 /** Clearance (px) kept above the terminal's bottom tab bar. */
 export const NAV = 80;
 

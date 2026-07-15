@@ -12,7 +12,7 @@
  * self-executing IIFE — the file you paste into the browser console.
  */
 
-import { API, REVIEW_EVERY, POLL_MS, C } from "./config";
+import { API, REVIEW_EVERY, POLL_MS, C, REVENGE_WARNING_ENABLED } from "./config";
 import { pnl, sgn, median, isWin, fk, postLossTrades } from "./format";
 import { S, readBalance } from "./state";
 import { buildComment } from "./comment";
@@ -60,7 +60,7 @@ function processTrades(list: Trade[]): void {
     // Revenge check (post-facto fallback): did this trade escalate risk right
     // after a loss? Only warn if it JUST happened — never criticise old history
     // (app open / re-inject): the trade must have closed within REVENGE_FRESH_MS.
-    const sig = detectRevenge(tr, all);
+    const sig = REVENGE_WARNING_ENABLED ? detectRevenge(tr, all) : null;
     if (sig && Date.now() - tr.closeTime <= REVENGE_FRESH_MS) warnRevenge(sig, tr.mult, tr.sumInv);
 
     S.newTrades.push(tr);
@@ -143,10 +143,13 @@ const iv = setInterval(poll, POLL_MS);
 
 // Pre-trade path (ideal): warn the instant Buy/Sell is pressed, from the live
 // order form — before/at the moment the trade opens. Falls back to the poll.
-const stopWatch = installOrderWatch((mult, margin) => {
-  const sig = detectRevengePending(mult, margin, Date.now(), S.baseAll.concat(S.newTrades));
-  if (sig) warnRevenge(sig, mult, margin);
-});
+// Only installed when the warning is enabled (see REVENGE_WARNING_ENABLED).
+const stopWatch = REVENGE_WARNING_ENABLED
+  ? installOrderWatch((mult, margin) => {
+      const sig = detectRevengePending(mult, margin, Date.now(), S.baseAll.concat(S.newTrades));
+      if (sig) warnRevenge(sig, mult, margin);
+    })
+  : () => { /* revenge warning disabled */ };
 
 w.__lbxCoachStop = () => {
   clearInterval(iv);
